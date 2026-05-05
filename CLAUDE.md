@@ -20,9 +20,10 @@ If you've never been here before, read in this order (skim, don't memorise):
 4. **`swarm-research/PROTOCOL.md`** — the substrate rules (deposit format, vocab, budget) — reuse this when spawning further specialist agents
 5. **`swarm-research/findings/*.md`** — the 9 agent reports; source-of-truth for any claim being tagged
 6. **`~/.claude/projects/-Users-nick-git-experiments-aco/memory/MEMORY.md`** — auto-memory index for project state, references, and the operating-discipline feedback cluster
-7. **`~/.claude/consolidation/<latest>/next-session-prompt.md`** — the bridge from the previous session, *if it exists and is fresh* (older than ~7 days = stale, skip)
+7. **`TASKS.md`** at the repo root — **source-of-truth** for the active task list, with full descriptions. Read this before deciding what to work on.
+8. **`~/.claude/consolidation/<latest>/next-session-prompt.md`** — the bridge from the previous session, *if it exists and is fresh* (older than ~7 days = stale, skip)
 
-Pending tasks from the previous session auto-restore via the wake-up hook from `pending-tasks.json` in the project memory dir. If they didn't, recreate them by hand from `next-session-prompt.md`.
+Task state is **canonically in `TASKS.md`** (in repo, durable). The `pending-tasks.json` snapshot in `~/.claude/projects/-Users-nick-git-experiments-aco/memory/` and the `next-session-prompt.md` are *transient mirrors* — convenient when fresh, but `TASKS.md` is the authoritative list. If they conflict, `TASKS.md` wins. Update `TASKS.md` whenever a task starts, finishes, or new ones are surfaced.
 
 ## Current state (as of 2026-05-05)
 
@@ -60,6 +61,7 @@ Lessons from the auto-memory feedback cluster — read these before doing more s
 ```
 README.md                       human-facing pitch
 CLAUDE.md                       this file
+TASKS.md                        source-of-truth for active tasks (durable, in-repo)
 swarm-research/
 ├── PROTOCOL.md                 substrate rules
 ├── SYNTHESIS.md                consolidated findings (Step 0 pending: claims ledger)

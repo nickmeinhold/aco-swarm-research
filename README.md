@@ -31,6 +31,20 @@ Early-stage. The synthesis on disk (`swarm-research/SYNTHESIS.md`) reads more co
 
 What this means for a reader: the questions are real, the substrate is built, the headline experiment is well-defined, and the prior-art reconnaissance is broad. The novelty intersection is *plausible pending verification*, not confirmed.
 
+## Where we're going next
+
+Concrete open lines of work (full descriptions in [`TASKS.md`](TASKS.md)):
+
+- **Step 0** — Add a *Claims Ledger* to `SYNTHESIS.md`: tag every headline claim as `verified` / `reported-by-agent` / `speculative` / `experiment-required`, demote language inline. Gates everything else.
+- **Step 1** — Spawn a meta-loop specialist over DSPy / GEPA / Sakana AI Scientist / AlphaEvolve / FunSearch. *Has anyone shown LLMs-as-ants rewriting their own coordination protocol with measurable self-improvement on the same problem?*
+- **Step 2** — Hetionet verification: confirm lithium → ALS is a recoverable held-out edge in v1.0, with sufficient metapaths remaining post-deletion.
+- **Step 3** — One-page claim diff vs ACO-ToT, Sherkat 2018, SwarmSys, ReEvo, CodeCRDT, LLM-MABS, AMRO-S, TxGNN. Reviewer-2 prevention.
+- **Step 4** — Build a 10-ant local file-stigmergy toy on a laptop (Haiku or Qwen2.5-3B, ~1000-node KG, mtime-as-strength). *Does file-based persistent stigmergy behave qualitatively differently from in-memory pheromone matrices?* Prerequisite for OCI deployment, not a substitute.
+- **Side: φ-on-non-edges canon audit** — verify "frustration pheromone on non-edges" has no prior construct in Dorigo & Stützle 2004 / MMAS / hyper-cube ACO / ACO_R / 2020–2026 surveys. If absent: stand-alone methods contribution.
+- **Side: engram self-citation reconciliation** — locate the prior knowledge-graph hole-finding project, determine whether it operationalised anything pheromone-on-absent-relation-like.
+
+If any of these light you up: open an issue, start a discussion, or fork. The `Explore` and the `cage-match` are both welcome.
+
 ## Repository layout
 
 ```
