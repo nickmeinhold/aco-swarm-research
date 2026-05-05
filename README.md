@@ -5,7 +5,8 @@
 An experimental research project at the intersection of:
 
 - **Ant Colony Optimization** (Dorigo, 1992) — biologically-inspired metaheuristic where simple agents coordinate through chemical traces in a shared environment
-- **LLM-as-ant agents** — small local models (Qwen2.5-7B, SmolLM2-360M) acting as foragers, not oracles
+- **LLM-as-ant agents** — small local models (Qwen2.5-7B Q4 "queen", SmolLM2-360M "micros") acting as foragers, not oracles
+- **The whole colony lives on Oracle Cloud's perpetual-free tier** — 1 × ARM Ampere A1 (24GB RAM, 4 OCPU) as the queen + 4 × AMD x86 micros (1GB each) as the ant fleet, no credit card expiring on you. Heterogeneous compute is a feature: the queen↔micro bandwidth cap is the "octopus brain ↔ arm" tunable knob the experiment is designed around.
 - **File-based stigmergy** — the substrate is the OS itself: directory = topology, `mtime` = pheromone strength, `touch`/`rm` = reinforce/evaporate
 - **Knowledge-graph hole-finding** — depositing pheromone on *non-edges* the colony wishes existed, operationalising Burt's structural-holes theory
 - **Drug repurposing as the demo target** — recovering held-out edges in [Hetionet](https://het.io) (lithium → ALS, sildenafil → PAH, …)

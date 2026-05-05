@@ -6,6 +6,8 @@ Orientation for AI collaborators (primarily Claude instances) walking into this 
 
 An experimental research project on **LLM-as-ant ACO with file-based stigmergy**, with knowledge-graph hole-finding for drug repurposing as the headline application. See `README.md` for the human-facing pitch.
 
+**Deployment target**: Oracle Cloud Free Tier — 1 × ARM Ampere A1 (24GB / 4 OCPU) as the Qwen2.5-7B Q4 "queen" + 4 × AMD x86 micros (1GB each) as SmolLM2-360M "ant" hosts. The queen↔micro bandwidth cap is a load-bearing tunable knob ("octopus brain ↔ arm" hypothesis), not an incidental constraint. Step 4 (10-ant local toy on Nick's laptop) is the *prerequisite* for OCI deployment, not a substitute — see Task #6.
+
 The research **method** matches the research **subject**: a Claude-driven multi-agent swarm using file-based pheromone signals is researching whether file-based pheromone signals work for multi-agent swarms. This recursion is intentional and load-bearing — every operating-discipline lesson learned in coordinating the swarm is itself a finding.
 
 ## Re-entry sequence
