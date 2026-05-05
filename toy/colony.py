@@ -1,0 +1,272 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["anthropic>=0.39"]
+# ///
+"""
+ACO laptop toy — minimal file-based stigmergy substrate test.
+
+Task #5 (TASKS.md): does file-based persistent stigmergy behave qualitatively
+differently from in-memory pheromone matrices? This is the smallest viable
+demonstration: synthetic KG, 5 ants × 3 cycles, file-based deposits with
+mtime-decoupled (timestamp-in-payload) decay, async-concurrent ants per cycle.
+
+Run:
+  uv run colony.py                # LLM ants (Haiku 4.5) — needs ANTHROPIC_API_KEY
+  uv run colony.py --mock         # heuristic ants, no API calls
+  uv run colony.py --reset --mock # wipe substrate, then run mock
+"""
+
+import argparse
+import asyncio
+import hashlib
+import json
+import math
+import random
+import shutil
+import time
+from pathlib import Path
+
+# --- Substrate config ---
+ROOT = Path(__file__).parent / "data" / "pheromones"
+TAU = 60.0  # decay time-constant in seconds; strength = quality * exp(-age/TAU)
+
+
+def edge_key(a: str, b: str) -> str:
+    a, b = sorted([a, b])
+    return f"{a}__{b}"
+
+
+# --- Knowledge graph (synthetic ER + chain backbone for connectivity) ---
+def make_kg(n_nodes: int = 20, avg_degree: int = 4, seed: int = 42):
+    rng = random.Random(seed)
+    nodes = [f"n{i}" for i in range(n_nodes)]
+    adj: dict[str, set[str]] = {n: set() for n in nodes}
+    # Backbone — guarantees source can reach target
+    for i in range(n_nodes - 1):
+        adj[nodes[i]].add(nodes[i + 1])
+        adj[nodes[i + 1]].add(nodes[i])
+    # Random extra edges
+    extra = max(0, (n_nodes * avg_degree) // 2 - (n_nodes - 1))
+    for _ in range(extra):
+        a, b = rng.sample(nodes, 2)
+        adj[a].add(b)
+        adj[b].add(a)
+    return {n: sorted(adj[n]) for n in nodes}
+
+
+# --- Substrate primitives ---
+def deposit(edge: str, agent_id: str, quality: float) -> Path:
+    """Write a deposit file. The file IS the pheromone — its existence + payload encode strength."""
+    d = ROOT / edge
+    d.mkdir(parents=True, exist_ok=True)
+    sig = hashlib.sha256(f"{agent_id}|{edge}|{quality}".encode()).hexdigest()[:12]
+    ts_ns = time.time_ns()
+    payload = {
+        "agent": agent_id,
+        "edge": edge,
+        "quality": quality,
+        "ts": ts_ns / 1e9,
+        "sig": sig,
+    }
+    # ts_ns prefix gives natural sort + collision-resistant filenames under concurrency
+    f = d / f"{ts_ns}-{agent_id}-{int(quality * 1000):04d}.dep"
+    f.write_text(json.dumps(payload))
+    return f
+
+
+def strength(edge: str, now: float | None = None) -> float:
+    """Decay-weighted sum across all deposits on this edge."""
+    d = ROOT / edge
+    if not d.exists():
+        return 0.0
+    if now is None:
+        now = time.time()
+    total = 0.0
+    for f in d.iterdir():
+        if not f.name.endswith(".dep"):
+            continue
+        try:
+            payload = json.loads(f.read_text())
+            age = now - payload["ts"]
+            total += payload["quality"] * math.exp(-age / TAU)
+        except Exception:
+            continue
+    return total
+
+
+def evaporate(max_age_sec: float = 600.0) -> int:
+    """Delete deposits older than max_age (effectively zero strength). Returns count removed."""
+    if not ROOT.exists():
+        return 0
+    now = time.time()
+    removed = 0
+    for edge_dir in ROOT.iterdir():
+        if not edge_dir.is_dir():
+            continue
+        for f in edge_dir.iterdir():
+            if not f.name.endswith(".dep"):
+                continue
+            try:
+                payload = json.loads(f.read_text())
+                if now - payload["ts"] > max_age_sec:
+                    f.unlink()
+                    removed += 1
+            except Exception:
+                f.unlink()
+                removed += 1
+    return removed
+
+
+# --- Ant policies ---
+SYS_PROMPT = """\
+You are a foraging ant in a swarm. You walk on a graph and follow pheromone trails left by other ants.
+
+You will be told:
+- Your current node
+- The target node you are trying to reach
+- Your path so far (to avoid pointless loops)
+- Your neighbours and the pheromone strength on each edge to them
+
+Strong pheromone (high number) means other ants found that edge useful. Weak/zero means unexplored. Balance exploitation (follow strong trails) with exploration (try unmarked edges sometimes), and avoid revisiting nodes in your path unless cornered.
+
+Reply with EXACTLY one word: the name of the neighbour to walk to. No reasoning, no preamble.\
+"""
+
+
+async def llm_step(client, current, target, neighbours_with_str, path):
+    msg = (
+        f"Current: {current}\n"
+        f"Target: {target}\n"
+        f"Path so far: {' -> '.join(path)}\n"
+        f"Neighbours and pheromone strengths:\n"
+        + "\n".join(f"  {n}: {s:.3f}" for n, s in neighbours_with_str)
+    )
+    resp = await client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=20,
+        system=[{"type": "text", "text": SYS_PROMPT, "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": msg}],
+    )
+    return resp.content[0].text.strip().split()[0].strip(".,;:!?")
+
+
+def heuristic_step(current, target, neighbours_with_str, path):
+    """Mock ant for substrate plumbing tests — epsilon-greedy on pheromone."""
+    visited = set(path)
+    options = [(n, s) for n, s in neighbours_with_str if n not in visited]
+    if not options:
+        options = list(neighbours_with_str)
+    if random.random() < 0.2:
+        return random.choice(options)[0]
+    return max(options, key=lambda x: x[1] + random.random() * 0.05)[0]
+
+
+async def run_ant(ant_id, kg, source, target, max_steps, client, mock):
+    path = [source]
+    current = source
+    for _ in range(max_steps):
+        if current == target:
+            break
+        nbrs = kg[current]
+        if not nbrs:
+            break
+        nbrs_str = [(n, strength(edge_key(current, n))) for n in nbrs]
+        try:
+            if mock:
+                nxt = heuristic_step(current, target, nbrs_str, path)
+            else:
+                nxt = await llm_step(client, current, target, nbrs_str, path)
+            if nxt not in kg[current]:
+                # LLM returned something invalid; fall back to highest pheromone neighbour
+                nxt = max(nbrs_str, key=lambda x: x[1])[0]
+        except Exception as e:
+            print(f"  ant {ant_id} step error: {e}")
+            break
+        path.append(nxt)
+        current = nxt
+    success = current == target
+    quality = (1.0 / len(path)) if success else 0.0  # shorter winning path => higher quality
+    if success:
+        for a, b in zip(path, path[1:]):
+            deposit(edge_key(a, b), ant_id, quality)
+    return {"ant": ant_id, "path": path, "success": success, "quality": quality}
+
+
+# --- Colony loop ---
+async def run_cycle(cycle_n, n_ants, kg, source, target, max_steps, client, mock):
+    print(f"\n=== Cycle {cycle_n} ===")
+    tasks = [
+        run_ant(f"a{i}", kg, source, target, max_steps, client, mock)
+        for i in range(n_ants)
+    ]
+    results = await asyncio.gather(*tasks)
+    for r in results:
+        marker = "OK  " if r["success"] else "FAIL"
+        print(f"  [{marker}] {r['ant']} q={r['quality']:.3f} len={len(r['path']):2d} path={'->'.join(r['path'])}")
+    n_ok = sum(1 for r in results if r["success"])
+    print(f"  Cycle {cycle_n}: {n_ok}/{n_ants} reached target")
+    return results
+
+
+def show_top_edges(kg, k=8):
+    edges = []
+    for n, nbrs in kg.items():
+        for m in nbrs:
+            if n < m:
+                e = edge_key(n, m)
+                s = strength(e)
+                if s > 0:
+                    n_dep = sum(1 for f in (ROOT / e).iterdir() if f.name.endswith(".dep"))
+                    edges.append((e, s, n_dep))
+    edges.sort(key=lambda x: -x[1])
+    if edges:
+        print("  Top pheromone edges:")
+        for e, s, n_dep in edges[:k]:
+            print(f"    {e}: strength={s:.3f}  deposits={n_dep}")
+    else:
+        print("  (no pheromone yet)")
+
+
+async def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--mock", action="store_true", help="heuristic ants (no API calls)")
+    p.add_argument("--reset", action="store_true", help="wipe substrate before run")
+    p.add_argument("--ants", type=int, default=5)
+    p.add_argument("--cycles", type=int, default=3)
+    p.add_argument("--nodes", type=int, default=20)
+    p.add_argument("--max-steps", type=int, default=12)
+    args = p.parse_args()
+
+    if args.reset and ROOT.exists():
+        shutil.rmtree(ROOT)
+    ROOT.mkdir(parents=True, exist_ok=True)
+
+    kg = make_kg(n_nodes=args.nodes, avg_degree=4)
+    source, target = "n0", f"n{args.nodes - 1}"
+    print(f"KG: {args.nodes} nodes, source={source}, target={target}")
+    print(f"  source ({source}) neighbours: {kg[source]}")
+    print(f"  target ({target}) neighbours: {kg[target]}")
+    print(f"  TAU={TAU}s, ants/cycle={args.ants}, cycles={args.cycles}, max_steps={args.max_steps}, mock={args.mock}")
+
+    client = None
+    if not args.mock:
+        from anthropic import AsyncAnthropic
+        client = AsyncAnthropic()
+
+    all_results = []
+    for c in range(1, args.cycles + 1):
+        results = await run_cycle(c, args.ants, kg, source, target, args.max_steps, client, args.mock)
+        all_results.append(results)
+        removed = evaporate(max_age_sec=600)
+        if removed:
+            print(f"  evaporator: removed {removed} stale deposits")
+        show_top_edges(kg)
+
+    n_total_ok = sum(r["success"] for cycle in all_results for r in cycle)
+    n_total = args.cycles * args.ants
+    n_dep_files = sum(1 for _ in ROOT.glob("*/*.dep"))
+    print(f"\n=== Summary: {n_total_ok}/{n_total} successful, {n_dep_files} deposit files on disk ===")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

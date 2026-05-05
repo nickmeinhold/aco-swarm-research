@@ -1,0 +1,4 @@
+data/pheromones/
+__pycache__/
+*.pyc
+.venv/

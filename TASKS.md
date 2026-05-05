@@ -85,7 +85,14 @@ This is the scaffold of the related-work section and the document that prevents 
 
 ### #5 Build 10-ant local file-stigmergy toy (laptop, no OCI)
 
-Status: pending. **Prerequisite for OCI deployment, not a substitute.**
+Status: **in-progress** (initial substrate plumbing verified 2026-05-05). **Prerequisite for OCI deployment, not a substitute.**
+
+First-run findings (see [`toy/README.md`](toy/README.md)):
+- Substrate primitives (deposit / decay-weighted strength / evaporator) work cleanly at small N. 5 async-concurrent ants per cycle produced 118 readable deposit files with no corruption.
+- LLM ants (Haiku 4.5 via Anthropic API) reached target 15/15 across 3 cycles on a 20-node synthetic ER graph.
+- **`experiment-required` finding**: swarm converged on a suboptimal 10-hop path over a 5-hop alternative — classical Ant System premature-convergence pathology. Confirms the project spec's reliance on **MMAS** ([Stützle & Hoos 2000](https://doi.org/10.1016/S0167-739X%2800%2900043-1)) for bounded reinforcement.
+
+Remaining for full Task #5 closure:
 
 aco-classical's load-bearing open question: *does file-based persistent stigmergy behave qualitatively differently from in-memory pheromone matrices?*
 
