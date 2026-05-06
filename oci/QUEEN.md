@@ -37,7 +37,7 @@ curl http://localhost:11434/api/generate -d '{"model":"qwen2.5:7b-instruct-q4_K_
 
 - **No public network exposure of port 11434.** Ollama is bound to localhost only on the queen — access via SSH tunnel or local-network only. This is the right default; don't open 11434 to the public internet.
 - **No file-substrate scaffolding on the queen yet.** `data/pheromones/` and friends will go up only after Task #5 (laptop toy) closes — Task #5 is the gate per `TASKS.md`.
-- **No 4 × AMD x86 micros provisioned yet.** The full project spec calls for 4 micros as ant hosts. They'll be provisioned when the laptop toy answers the "does file-stigmergy work qualitatively differently" question.
+- ~~**No 4 × AMD x86 micros provisioned yet.**~~ **Update 2026-05-06:** 2 × E2.1.Micro ant hosts (`ant-1`, `ant-2`) provisioned on the same VCN/subnet — see `oci/ANTS.md`. The "4 micros" target in the original spec is `experiment-required` against actual free-tier quota (cap is 2 per tenancy in `ap-melbourne-1`); see `feedback_oci_quota_vs_spec.md`. Intra-subnet reachability is not yet verified — see `feedback_oci_intra_subnet_reachability.md`.
 - **No keep-alive cron.** Account is presumably PAYG; if it isn't, idle reclamation is a risk — see `~/git/experiments/imagineering-infra/scripts/oci-retry-provision.sh` for the keep-alive pattern.
 
 ## Architectural notes
