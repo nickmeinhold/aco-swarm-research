@@ -52,22 +52,34 @@ The deployment topology described in `swarm-research/SYNTHESIS.md`, root `CLAUDE
 
 **Implication:** the "4 micros" claim is `experiment-required` against quota. Demote to "1 queen + N micros, N ≤ 2 on current OCI free tier in this tenancy" in the next pass over those documents. Architectures that depend on 4+ ants need to flex to 2, or motivate a paid-tier ask.
 
-### Finding 2 — same-subnet ≠ intra-subnet reachability
+### Finding 2 — same-subnet ≠ intra-subnet reachability (resolved 2026-05-06)
 
-**Tag (ICMP fact): `verified`** — ICMP from each ant to queen 10.0.0.4 returned 100% packet loss as of 2026-05-06.
+**Tag (ICMP fact): `verified`** — ICMP from each ant to queen 10.0.0.4 returned 100% packet loss; root cause is the subnet security list permitting only ICMP type-3 from 10.0.0.0/16 (path-MTU only), not echo-request.
 
-**Tag (TCP path): `experiment-required`** — at time of writing, whether TCP intra-subnet (e.g. ant → queen:11434) works has not been tested. Investigation in flight in a separate subagent.
+**Tag (TCP/11434 ant→queen): `verified` working** as of 2026-05-06. Cold call (model load + inference) **10.22s**; warm call **1.09s**; same numbers from both ants. Resolution required two changes — see Finding 3.
 
-All three instances are on subnet `xdeca-subnet` (10.0.0.0/24): queen 10.0.0.4, ant-1 10.0.0.107, ant-2 10.0.0.58. The simple model — "same subnet, therefore reachable" — does not hold here. Likely culprits: (a) subnet security-list ingress rules dropping ICMP / TCP intra-subnet by default; (b) queen-side iptables / UFW; (c) both.
+**Tag (architecture implication): `verified`** — same-subnet placement does NOT imply intra-subnet reachability. OCI's default-deny posture on the security list combines with the default Ubuntu host iptables (`REJECT --reject-with icmp-host-prohibited` trailing rule) to require *two* rules per service exposed on the private VCN. The "ant → queen private IP" path is now sound; any future ant-hosted service will hit the same wall.
 
-**Why it matters:** the documented ant→queen path in `oci/QUEEN.md` is `ssh -L 11434:localhost:11434` from the laptop. That works (verified earlier). The *intended OCI deployment path* — ants on 10.0.0.0/24 hitting queen on 10.0.0.4:11434 directly over the VCN — is unverified. Any architecture diagram showing "ant → queen private IP" should carry an `experiment-required` tag until TCP reachability is confirmed and, if needed, a security-list ingress rule is added.
+### Finding 3 — two-blocker network on the OCI default Ubuntu image
+
+**Tag: `verified`** (Finding 2's resolution surfaced it).
+
+To expose a service on the OCI private VCN between two instances, you need:
+
+1. **Subnet security list ingress rule** scoped to the source CIDR + destination port (stateful TCP).
+2. **Host iptables ACCEPT rule** scoped to the same CIDR + port, inserted **before** the trailing `REJECT --reject-with icmp-host-prohibited` rule that ships in the default OCI Ubuntu chain. Persist with `netfilter-persistent save`.
+
+Diagnostic: after fixing only (1), `nc` returns `No route to host` rather than timing out. That message is the ICMP-host-prohibited reject from layer (2) — it's diagnostic gold, not a routing issue.
+
+**Implication for ant-hosted services:** ant-1 and ant-2 run the same default Ubuntu 22.04 image. When SmolLM2-360M lands on the ants and the queen (or a peer ant) needs to call it, both rules will need to be re-added per service. Pre-empting this in the cloud-init for the ant SmolLM2 deployment is worth considering.
 
 ## What's *not* set up yet
 
 - **No ollama on ants.** Pending Task #6 prerequisites and the SmolLM2-360M install.
 - **No file-substrate scaffolding on ants.** `data/pheromones/` etc. land after Task #5 closes.
-- **No verified intra-subnet ant→queen path** (Finding 2 above).
+- ~~**No verified intra-subnet ant→queen path**~~ — **resolved 2026-05-06**, see Findings 2 & 3 above.
 - **No paid-tier ask.** With the 2-micro cap, the "4 ants" target is unreachable on free tier (Finding 1 above).
+- **No reverse path queen→ant verified.** When ants host SmolLM2, the queen calling them on the private VCN will need the same two-rule pattern (SL + ant-side iptables) — see Finding 3.
 
 ## Connections
 
