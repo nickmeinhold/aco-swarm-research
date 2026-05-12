@@ -1,0 +1,65 @@
+Downloading cpython-3.14.5-linux-x86_64-gnu (download) (34.3MiB)
+ Downloaded cpython-3.14.5-linux-x86_64-gnu (download)
+Downloading pydantic-core (2.0MiB)
+ Downloaded pydantic-core
+Installed 16 packages in 118ms
+KG: 20 nodes, source=n0, target=n19
+  source (n0) neighbours: ['n1', 'n16', 'n2', 'n3', 'n5']
+  target (n19) neighbours: ['n11', 'n18', 'n8']
+  TAU=60.0s, ants/cycle=5, cycles=3, max_steps=12, mock=False
+  backend: queen @ http://10.0.0.4:11434 model=qwen2.5:7b-instruct-q4_K_M
+
+=== Cycle 1 ===
+  [OK  ] a0 q=0.083 len=12 path=n0->n16->n15->n14->n13->n10->n11->n12->n3->n17->n18->n19
+  [OK  ] a1 q=0.200 len= 5 path=n0->n16->n17->n18->n19
+  [OK  ] a2 q=0.083 len=12 path=n0->n16->n15->n14->n13->n10->n11->n12->n3->n17->n18->n19
+  [OK  ] a3 q=0.083 len=12 path=n0->n16->n15->n14->n13->n12->n11->n10->n6->n17->n18->n19
+  [OK  ] a4 q=0.200 len= 5 path=n0->n16->n17->n18->n19
+  Cycle 1: 5/5 reached target
+  Top pheromone edges:
+    n0__n16: strength=0.208  deposits=5
+    n17__n18: strength=0.208  deposits=5
+    n18__n19: strength=0.208  deposits=5
+    n10__n11: strength=0.204  deposits=3
+    n11__n12: strength=0.204  deposits=3
+    n13__n14: strength=0.204  deposits=3
+    n14__n15: strength=0.204  deposits=3
+    n15__n16: strength=0.204  deposits=3
+
+=== Cycle 2 ===
+  [OK  ] a0 q=0.200 len= 5 path=n0->n16->n17->n18->n19
+  [OK  ] a1 q=0.200 len= 5 path=n0->n16->n17->n18->n19
+  [FAIL] a2 q=0.000 len=13 path=n0->n16->n15->n14->n13->n10->n11->n12->n3->n12->n3->n17->n18
+  [FAIL] a3 q=0.000 len=13 path=n0->n16->n15->n14->n13->n10->n11->n12->n3->n12->n3->n17->n18
+  [FAIL] a4 q=0.000 len=13 path=n0->n16->n15->n14->n13->n10->n11->n12->n3->n12->n3->n17->n18
+  Cycle 2: 2/5 reached target
+  evaporator: removed 8 stale deposits
+  Top pheromone edges:
+    n0__n16: strength=0.007  deposits=5
+    n17__n18: strength=0.007  deposits=5
+    n18__n19: strength=0.007  deposits=5
+    n16__n17: strength=0.006  deposits=2
+    n10__n11: strength=0.000  deposits=3
+    n11__n12: strength=0.000  deposits=3
+    n13__n14: strength=0.000  deposits=3
+    n14__n15: strength=0.000  deposits=3
+
+=== Cycle 3 ===
+  [OK  ] a0 q=0.083 len=12 path=n0->n16->n15->n14->n13->n12->n11->n10->n6->n17->n18->n19
+  [OK  ] a1 q=0.083 len=12 path=n0->n16->n15->n14->n13->n10->n11->n12->n3->n17->n18->n19
+  [FAIL] a2 q=0.000 len=13 path=n0->n16->n15->n14->n13->n14->n7->n4->n3->n12->n11->n10->n6
+  [OK  ] a3 q=0.200 len= 5 path=n0->n16->n17->n18->n19
+  [OK  ] a4 q=0.083 len=12 path=n0->n16->n15->n14->n13->n10->n11->n12->n3->n17->n18->n19
+  Cycle 3: 4/5 reached target
+  evaporator: removed 41 stale deposits
+  Top pheromone edges:
+    n0__n16: strength=0.139  deposits=4
+    n17__n18: strength=0.139  deposits=4
+    n18__n19: strength=0.139  deposits=4
+    n10__n11: strength=0.139  deposits=3
+    n11__n12: strength=0.139  deposits=3
+    n13__n14: strength=0.139  deposits=3
+    n14__n15: strength=0.139  deposits=3
+    n15__n16: strength=0.139  deposits=3
+
+=== Summary: 11/15 successful, 37 deposit files on disk ===

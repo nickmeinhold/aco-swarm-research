@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["anthropic>=0.39"]
+# dependencies = ["anthropic>=0.39", "httpx>=0.27"]
 # ///
 """
 ACO laptop toy — minimal file-based stigmergy substrate test.
@@ -117,6 +117,21 @@ def evaporate(max_age_sec: float = 600.0) -> int:
     return removed
 
 
+# --- LLM backends ---
+class QueenClient:
+    """LLM backend pointed at an ollama HTTP API (e.g. the OCI queen via private VCN).
+
+    Holds the httpx.AsyncClient and the model name so llm_step can stay polymorphic:
+    isinstance(client, QueenClient) → ollama; otherwise → AsyncAnthropic.
+    """
+
+    def __init__(self, base_url: str, model: str):
+        import httpx
+        self.http = httpx.AsyncClient(timeout=120.0)
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+
+
 # --- Ant policies ---
 SYS_PROMPT = """\
 You are a foraging ant in a swarm. You walk on a graph and follow pheromone trails left by other ants.
@@ -141,6 +156,22 @@ async def llm_step(client, current, target, neighbours_with_str, path):
         f"Neighbours and pheromone strengths:\n"
         + "\n".join(f"  {n}: {s:.3f}" for n, s in neighbours_with_str)
     )
+    if isinstance(client, QueenClient):
+        r = await client.http.post(
+            f"{client.base_url}/api/chat",
+            json={
+                "model": client.model,
+                "stream": False,
+                "messages": [
+                    {"role": "system", "content": SYS_PROMPT},
+                    {"role": "user", "content": msg},
+                ],
+                "options": {"num_predict": 20},
+            },
+        )
+        r.raise_for_status()
+        text = r.json()["message"]["content"]
+        return text.strip().split()[0].strip(".,;:!?")
     resp = await client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=20,
@@ -230,6 +261,10 @@ def show_top_edges(kg, k=8):
 async def main():
     p = argparse.ArgumentParser()
     p.add_argument("--mock", action="store_true", help="heuristic ants (no API calls)")
+    p.add_argument("--queen", action="store_true", help="ollama-on-queen ants (private VCN)")
+    p.add_argument("--queen-url", default="http://10.0.0.4:11434",
+                   help="ollama HTTP base URL (default: queen private IP)")
+    p.add_argument("--queen-model", default="qwen2.5:7b-instruct-q4_K_M")
     p.add_argument("--reset", action="store_true", help="wipe substrate before run")
     p.add_argument("--ants", type=int, default=5)
     p.add_argument("--cycles", type=int, default=3)
@@ -249,9 +284,15 @@ async def main():
     print(f"  TAU={TAU}s, ants/cycle={args.ants}, cycles={args.cycles}, max_steps={args.max_steps}, mock={args.mock}")
 
     client = None
-    if not args.mock:
+    if args.queen:
+        client = QueenClient(args.queen_url, args.queen_model)
+        print(f"  backend: queen @ {args.queen_url} model={args.queen_model}")
+    elif not args.mock:
         from anthropic import AsyncAnthropic
         client = AsyncAnthropic()
+        print("  backend: Anthropic Haiku 4.5")
+    else:
+        print("  backend: mock (heuristic ε-greedy)")
 
     all_results = []
     for c in range(1, args.cycles + 1):
