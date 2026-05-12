@@ -15,7 +15,7 @@ The Qwen2.5-7B Q4 inference host for the ACO swarm, deployed on Oracle Cloud Fre
 | Memory | 23 GB free of 24 GB (idle) |
 | ollama | v0.23.0, systemd-managed, `active`, bound to `0.0.0.0:11434` (private-VCN reachable) |
 | Loaded model | `qwen2.5:7b-instruct-q4_K_M` (4.7 GB) |
-| Smoke-test latency | cold ~10.2s (model load + inference); warm ~1.1s — measured from ant-1 over private VCN, 2026-05-06 |
+| Smoke-test latency | cold ~10.2s (model load + inference); warm ~1.1s — measured from ant-1 over private VCN, 2026-05-06. **Caveat:** trivial-prompt micro-benchmark only; toy-scale ant-step prompts (~700-char system + ~250-char user, 20-token output) saw ~10s per call in `toy/runs/2026-05-12-oci-run-1.md` — see `feedback_smoke_test_prompt_shape.md`. |
 
 OCI tenancy is the `[MELBOURNE]` profile in `~/.oci/config`. Tenancy OCID is in the project memory at `~/.claude/projects/-Users-nick-git-experiments-aco/memory/reference_oci_melbourne_instance.md`.
 
