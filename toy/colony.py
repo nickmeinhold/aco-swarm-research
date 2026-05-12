@@ -201,14 +201,22 @@ async def run_ant(ant_id, kg, source, target, max_steps, client, mock):
         nbrs = kg[current]
         if not nbrs:
             break
-        nbrs_str = [(n, strength(edge_key(current, n))) for n in nbrs]
+        # Visited-filter: hide revisited neighbours from the LLM unless cornered.
+        # Soft instructions ("avoid revisiting") are unreliable on smaller models
+        # (Qwen-7B-Q4 produced n12→n3→n12→n3 loops in 2026-05-12-oci-run-1). Only
+        # relax the filter when every neighbour has been seen — "cornered" mode.
+        visited = set(path)
+        nbrs_visible = [n for n in nbrs if n not in visited] or nbrs
+        nbrs_str = [(n, strength(edge_key(current, n))) for n in nbrs_visible]
         try:
             if mock:
                 nxt = heuristic_step(current, target, nbrs_str, path)
             else:
                 nxt = await llm_step(client, current, target, nbrs_str, path)
-            if nxt not in kg[current]:
-                # LLM returned something invalid; fall back to highest pheromone neighbour
+            if nxt not in nbrs_visible:
+                # LLM returned a node outside what we showed it (hallucination or a
+                # filtered visited revisit). Fall back to highest pheromone among
+                # what was visible — keeps the filter honest.
                 nxt = max(nbrs_str, key=lambda x: x[1])[0]
         except Exception as e:
             print(f"  ant {ant_id} step error: {e}")

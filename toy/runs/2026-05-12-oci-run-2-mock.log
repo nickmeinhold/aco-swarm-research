@@ -1,0 +1,58 @@
+KG: 20 nodes, source=n0, target=n19
+  source (n0) neighbours: ['n1', 'n16', 'n2', 'n3', 'n5']
+  target (n19) neighbours: ['n11', 'n18', 'n8']
+  TAU=60.0s, ants/cycle=5, cycles=3, max_steps=12, mock=True
+  backend: mock (heuristic ε-greedy)
+
+=== Cycle 1 ===
+  [FAIL] a0 q=0.000 len=13 path=n0->n2->n18->n8->n9->n10->n11->n12->n3->n17->n16->n15->n14
+  [OK  ] a1 q=0.083 len=12 path=n0->n5->n6->n10->n11->n12->n13->n17->n3->n4->n8->n19
+  [OK  ] a2 q=0.100 len=10 path=n0->n5->n6->n17->n13->n12->n3->n4->n8->n19
+  [FAIL] a3 q=0.000 len=13 path=n0->n1->n13->n12->n3->n4->n8->n9->n10->n6->n5->n0->n2
+  [OK  ] a4 q=0.083 len=12 path=n0->n5->n6->n17->n13->n10->n11->n12->n3->n4->n8->n19
+  Cycle 1: 3/5 reached target
+  Top pheromone edges:
+    n3__n4: strength=0.267  deposits=3
+    n4__n8: strength=0.267  deposits=3
+    n0__n5: strength=0.267  deposits=3
+    n5__n6: strength=0.267  deposits=3
+    n19__n8: strength=0.267  deposits=3
+    n13__n17: strength=0.267  deposits=3
+    n12__n3: strength=0.183  deposits=2
+    n17__n6: strength=0.183  deposits=2
+
+=== Cycle 2 ===
+  [FAIL] a0 q=0.000 len=13 path=n0->n5->n6->n17->n13->n1->n2->n18->n8->n4->n3->n12->n11
+  [OK  ] a1 q=0.091 len=11 path=n0->n5->n6->n17->n13->n12->n11->n10->n9->n8->n19
+  [FAIL] a2 q=0.000 len=13 path=n0->n5->n6->n17->n13->n12->n11->n10->n9->n8->n7->n4->n3
+  [FAIL] a3 q=0.000 len=13 path=n0->n5->n6->n17->n13->n14->n15->n16->n0->n2->n3->n12->n11
+  [OK  ] a4 q=0.083 len=12 path=n0->n2->n18->n17->n13->n10->n11->n12->n3->n4->n8->n19
+  Cycle 2: 2/5 reached target
+  Top pheromone edges:
+    n19__n8: strength=0.440  deposits=5
+    n13__n17: strength=0.440  deposits=5
+    n0__n5: strength=0.357  deposits=4
+    n5__n6: strength=0.357  deposits=4
+    n3__n4: strength=0.350  deposits=4
+    n4__n8: strength=0.350  deposits=4
+    n10__n11: strength=0.341  deposits=4
+    n11__n12: strength=0.341  deposits=4
+
+=== Cycle 3 ===
+  [OK  ] a0 q=0.125 len= 8 path=n0->n5->n6->n17->n3->n4->n8->n19
+  [OK  ] a1 q=0.091 len=11 path=n0->n5->n6->n17->n13->n12->n11->n10->n9->n8->n19
+  [OK  ] a2 q=0.091 len=11 path=n0->n5->n6->n17->n13->n12->n11->n10->n9->n8->n19
+  [FAIL] a3 q=0.000 len=13 path=n0->n5->n6->n17->n13->n12->n11->n10->n9->n8->n7->n14->n15
+  [OK  ] a4 q=0.100 len=10 path=n0->n16->n17->n13->n12->n11->n10->n9->n8->n19
+  Cycle 3: 4/5 reached target
+  Top pheromone edges:
+    n19__n8: strength=0.847  deposits=9
+    n13__n17: strength=0.722  deposits=8
+    n0__n5: strength=0.664  deposits=7
+    n5__n6: strength=0.664  deposits=7
+    n10__n11: strength=0.622  deposits=7
+    n11__n12: strength=0.622  deposits=7
+    n17__n6: strength=0.580  deposits=6
+    n12__n13: strength=0.555  deposits=6
+
+=== Summary: 9/15 successful, 88 deposit files on disk ===
