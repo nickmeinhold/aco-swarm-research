@@ -85,7 +85,7 @@ This is the scaffold of the related-work section and the document that prevents 
 
 ### #5 Build 10-ant local file-stigmergy toy (laptop, no OCI)
 
-Status: **in-progress** (initial substrate plumbing verified 2026-05-05). **Prerequisite for OCI deployment, not a substitute.**
+Status: **in-progress, partially scope-shifted to Step 5.** Initial substrate plumbing verified 2026-05-05; on 2026-05-06 the project jumped ahead to OCI provisioning (Step 5 below) before closing the laptop toy's remaining sub-items. The MMAS bounds, in-memory comparison, concurrency stress test, and Hetionet-subset-1000-nodes items remain owed — but several can now be done on OCI just as easily as locally (and OCI is cheaper per call). Decide when reopening: close as "superseded by Step 5" or keep open as the rigorous in-memory-vs-file-substrate comparison rig.
 
 First-run findings (see [`toy/README.md`](toy/README.md)):
 - Substrate primitives (deposit / decay-weighted strength / evaporator) work cleanly at small N. 5 async-concurrent ants per cycle produced 118 readable deposit files with no corruption.
@@ -152,3 +152,86 @@ See also: `~/.claude/projects/-Users-nick-git-experiments-aco/memory/project_eng
 ---
 
 *Numbering note: the `#N` IDs follow the order in which tasks were created in the previous session's TaskList (which differs from the Step ordering above — Step 0 is `#7` because it was created last, after the other six were already enumerated). The Step ordering reflects execution sequence; the `#N` IDs are stable identifiers for cross-reference.*
+
+---
+
+## Step 5 — OCI deployment (new 2026-05-06)
+
+The 2026-05-06 session jumped past the laptop toy and provisioned the OCI deployment topology. See "Completed (2026-05-06)" below for what landed. The remaining OCI-side work, in roughly the order it unblocks the next thing:
+
+### #8 Run existing toy on OCI via private VCN
+
+Status: pending. **Highest-leverage next move.**
+
+Take `toy/colony.py`, run it from ant-1 (130.162.196.243) with the LLM backend pointed at the queen's private IP `http://10.0.0.4:11434` instead of Haiku. Same 20-node ER+chain graph, same 5-ant × 3-cycle structure. Compares:
+
+- Cold + warm latency profile vs the laptop-Haiku baseline
+- Whether the Haiku-anti-diversity finding persists with Qwen-7B-Q4 (load-bearing for `feedback_llm_as_anti_diversity_prior.md`)
+- Whether file-substrate behaviour changes with the slower ant-step rate (1.09s/step on Qwen vs ~1-2s on Haiku — not very different actually)
+
+Output: a `toy/oci-run-N.md` log + a one-paragraph finding tagged with the ledger discipline.
+
+### #9 Deploy SmolLM2-360M to ant-1 and ant-2
+
+Status: pending. Required for the headline heterogeneous-models topology ("queen-Qwen-7B + ant-SmolLM2-360M").
+
+Install ollama on each ant, pull `smollm2:360m` (~250 MB), expose on `0.0.0.0:11434` via the same systemd drop-in pattern used on the queen. **Will hit the two-blocker network wall** (see `feedback_oci_intra_subnet_reachability.md`) on the *reverse* direction — queen needs to reach ant:11434 — requiring (a) subnet SL rule `10.0.0.4/32 → ant:11434` and (b) ant-side iptables ACCEPT before the trailing REJECT. Pre-empt in cloud-init if possible (see #11).
+
+Memory budget on E2.1.Micro is 1 GB — SmolLM2-360M Q4 is ~250 MB so headroom is real but tight. Verify with `htop` during inference.
+
+### #10 Substrate-distribution design note
+
+Status: pending. Load-bearing for any multi-node file-substrate work.
+
+The file-pheromone substrate currently lives on a single host. For the real deployment topology (queen + 2 ants writing/reading the same substrate), it needs to live somewhere all three can reach. Options:
+
+- **NFS/sshfs over private VCN** — simple, single shared mount
+- **rsync-cron** — eventual consistency, no shared mount, simpler ops
+- **bind-mount with sshfs** — same as NFS but per-host
+- **MinIO/S3-compatible blob store** — over-engineered for the scale
+- **Symlink trick / git-style merge** — clever but probably broken
+- **No shared substrate; each host writes locally + queen aggregates** — different model entirely
+
+Write `swarm-research/SUBSTRATE-DISTRIBUTION.md` enumerating these with their bandwidth/latency/consistency profiles, pick one, document the bandwidth knob it exposes (the "octopus brain ↔ arm" tunable per CLAUDE.md). Decide before #8/#9 actually do multi-node writes.
+
+### #11 Pre-empt two-blocker pattern in ant cloud-init template
+
+Status: pending. Low priority but high payoff when reprovisioning.
+
+The cloud-init currently used for ants installs base packages + a keep-alive cron. Extend it with an iptables ACCEPT rule for the expected service port BEFORE the trailing `REJECT --reject-with icmp-host-prohibited` rule, persisted via `netfilter-persistent save`. Means when SmolLM2 lands on an ant (or future re-provisioning happens) we don't repeat the diagnostic dance.
+
+### #12 Verify reverse path queen → ant
+
+Status: pending. Inverse of what was verified 2026-05-06.
+
+When SmolLM2 is up on ant-1 (#9), the queen needs to TCP-reach `10.0.0.107:11434`. Repeat the two-rule pattern in the reverse direction: subnet SL ingress `10.0.0.4/32 → 11434` on each ant, plus ant-side iptables ACCEPT. Smoke-test from queen with `curl http://10.0.0.107:11434/api/chat -d '...'`. Capture cold/warm latency from queen perspective.
+
+### #13 Queen keep-alive cron
+
+Status: pending. Idle-reclamation defense.
+
+Ants got the keep-alive cron from cloud-init (`/opt/keep-alive.sh` every 6h). Queen never got one — risk if the Melbourne tenancy is subject to idle reclamation (unclear). Install the same script on `nick-mel` via SSH; one-line crontab entry.
+
+### #14 Migrate ollama-unit backup off /tmp
+
+Status: pending. Low-priority hygiene.
+
+Backup of the queen's pre-rebind ollama systemd unit is at `/tmp/ollama-unit-before.txt` on the queen (created 2026-05-06 by the deployment subagent). Ephemeral — will vanish on reboot. Either recreate from `systemctl cat ollama.service` (the pre-rebind state is the base unit anyway, the override is in the drop-in), move to `/etc/ollama/backup/`, or just delete since the rebind is durable via drop-in.
+
+---
+
+## Completed (2026-05-06)
+
+### OCI ant host provisioning + private-VCN smoke test
+
+- 2 × `VM.Standard.E2.1.Micro` provisioned in `MNVQ:AP-MELBOURNE-1-AD-1`: `ant-1` (130.162.196.243 / 10.0.0.107) and `ant-2` (169.224.226.141 / 10.0.0.58). Same VCN/subnet (10.0.0.0/24) as queen at 10.0.0.4.
+- Queen ollama rebound to `0.0.0.0:11434` via systemd drop-in (clean, reversible). Subnet SL ingress + queen iptables ACCEPT both added for `10.0.0.0/24 → tcp/11434`. Public exposure verified absent (`nc 130.162.192.233 11434` from external times out).
+- Smoke test from ant-1 and ant-2 against `qwen2.5:7b-instruct-q4_K_M`: cold 10.22s, warm 1.09s. Both ants confirmed.
+- Documented in: `oci/QUEEN.md`, `oci/ANTS.md`, `feedback_oci_quota_vs_spec.md`, `feedback_oci_intra_subnet_reachability.md`. Commits `92e4718` + `8d04ddb` on `main`.
+
+### Findings landed in the claims ledger
+
+Two new findings tagged at the moment they were first asserted (small worked example of Step 0 discipline applied to live claims):
+
+- "1 queen + 4 AMD x86 micros" topology → `experiment-required` against free-tier quota; demoted to "1 queen + N micros, N≤2 on current free tier".
+- "Same-subnet placement implies private-VCN reachability" → `experiment-required` until two-rule fix (cloud SL + host iptables) is applied; OCI default Ubuntu ships an iptables trailing REJECT that gates independently from the cloud security list.
