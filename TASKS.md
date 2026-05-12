@@ -173,11 +173,13 @@ Output: a `toy/oci-run-N.md` log + a one-paragraph finding tagged with the ledge
 
 ### #9 Deploy SmolLM2-360M to ant-1 and ant-2
 
-Status: pending. Required for the headline heterogeneous-models topology ("queen-Qwen-7B + ant-SmolLM2-360M").
+Status: **closed 2026-05-12 as no-go.** Empirically dominated; see `toy/runs/2026-05-12-oci-run-3-smollm2.md`.
 
-Install ollama on each ant, pull `smollm2:360m` (~250 MB), expose on `0.0.0.0:11434` via the same systemd drop-in pattern used on the queen. **Will hit the two-blocker network wall** (see `feedback_oci_intra_subnet_reachability.md`) on the *reverse* direction — queen needs to reach ant:11434 — requiring (a) subnet SL rule `10.0.0.4/32 → ant:11434` and (b) ant-side iptables ACCEPT before the trailing REJECT. Pre-empt in cloud-init if possible (see #11).
+ollama + `smollm2:360m-instruct-q4_K_M` was installed on ant-1 and a full toy run (5 ants × 3 cycles) executed. Result: **3/15 success, 28m49s wall** — worse than heuristic (9/15, 0.68s) AND slower than queen-Qwen (11/15, 24m34s). The 1/8-OCPU x86 hardware is too compute-poor to run *any* LLM at ant-step rates that beat the heuristic baseline. This isn't a tuning problem; the model size that would fit fast enough is below the size that contributes useful intelligence.
 
-Memory budget on E2.1.Micro is 1 GB — SmolLM2-360M Q4 is ~250 MB so headroom is real but tight. Verify with `htop` during inference.
+**Architectural revision unlocked by this finding:** the honest deployment for OCI free-tier hardware is **heuristic-on-ants + queen-Qwen for escalation-on-stuck**, not the "1 queen + 4 ant-LLMs" topology in `CLAUDE.md` / `SYNTHESIS.md`. See new task #15 (heuristic+escalation prototype) below.
+
+Note: ant-2 was never touched — installing SmolLM2 there would just confirm the same finding on the same hardware. ant-1 still has ollama installed; if reusing for a different purpose (e.g. ant-side caching, substrate maintenance), the existing install is fine. Otherwise candidate for `systemctl disable --now ollama` to reclaim memory.
 
 ### #10 Substrate-distribution design note
 
@@ -211,6 +213,22 @@ When SmolLM2 is up on ant-1 (#9), the queen needs to TCP-reach `10.0.0.107:11434
 Status: pending. Idle-reclamation defense.
 
 Ants got the keep-alive cron from cloud-init (`/opt/keep-alive.sh` every 6h). Queen never got one — risk if the Melbourne tenancy is subject to idle reclamation (unclear). Install the same script on `nick-mel` via SSH; one-line crontab entry.
+
+### #15 Prototype heuristic-on-ant + queen-escalation-on-stuck (NEW 2026-05-12)
+
+Status: pending — the architecturally honest follow-up to #9's no-go finding.
+
+Modify `toy/colony.py` so each ant runs heuristic ε-greedy by default and only escalates to queen-Qwen when (a) it loops (current node already in path AND best-pheromone neighbour is also in path), or (b) pheromone strengths on all visible neighbours are below a threshold (cold-start case). One LLM call per escalation, not per step.
+
+Predicted behaviour (`speculative` until run):
+- Success rate ≥ heuristic baseline (escalation helps in cold-start)
+- Wall time closer to heuristic than to all-LLM (escalation is rare past cycle 1)
+- Queen-CPU usage drops by ~10×, since not every step hits it
+- Substrate's primary role becomes clearer — it carries the heuristic decisions and the queen's escalation decisions in the same coordinate system
+
+Acceptance: 5×3 toy run on same 20-node KG; report success rate, wall time, and escalation-call count. Tag results with ledger discipline as a new `toy/runs/2026-05-12-oci-run-4-heuristic-escalate.md`.
+
+This is now the **load-bearing experiment** — its result (positive or negative) directly resolves whether the OCI free-tier project is viable as currently scoped.
 
 ### #14 Migrate ollama-unit backup off /tmp
 
