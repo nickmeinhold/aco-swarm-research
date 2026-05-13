@@ -5,8 +5,8 @@
 An experimental research project at the intersection of:
 
 - **Ant Colony Optimization** (Dorigo, 1992) — biologically-inspired metaheuristic where simple agents coordinate through chemical traces in a shared environment
-- **LLM-as-ant agents** — small local models (Qwen2.5-7B Q4 "queen", SmolLM2-360M "micros") acting as foragers, not oracles
-- **The whole colony lives on Oracle Cloud's perpetual-free tier** — 1 × ARM Ampere A1 (24GB RAM, 4 OCPU) as the queen + 4 × AMD x86 micros (1GB each) as the ant fleet, no credit card expiring on you. Heterogeneous compute is a feature: the queen↔micro bandwidth cap is the "octopus brain ↔ arm" tunable knob the experiment is designed around.
+- **Heuristic ants + sparse LLM escalation** — ants run cheap ε-greedy pheromone-following by default; only call the queen LLM (Qwen-7B-Q4) when stuck (cornered, or wandering far from target). On the toy this matches Qwen-on-every-step quality at 2.4× speedup; the LLM's load-bearing role is **seeding the substrate during cold-start**, not deciding each step. *(This is the architecture as of 2026-05-13 — see Status below for what changed and why.)*
+- **The whole colony lives on Oracle Cloud's perpetual-free tier** — 1 × ARM Ampere A1 (24 GB, 4 OCPU) as the Qwen-7B-Q4 queen + up to 2 × AMD x86 micros (1/8 OCPU, 1 GB each) as ant hosts running heuristic + substrate I/O. The load-bearing tunable turns out to be **escalation frequency**, not network bandwidth.
 - **File-based stigmergy** — the substrate is the OS itself: directory = topology, `mtime` = pheromone strength, `touch`/`rm` = reinforce/evaporate
 - **Knowledge-graph hole-finding** — depositing pheromone on *non-edges* the colony wishes existed, operationalising Burt's structural-holes theory
 - **Drug repurposing as the demo target** — recovering held-out edges in [Hetionet](https://het.io) (lithium → ALS, sildenafil → PAH, …)
@@ -25,21 +25,38 @@ The research **method** matches the research **subject**: this repo's `swarm-res
 
 So the artifacts in `swarm-research/findings/` and `swarm-research/pheromones/` aren't a writeup of a swarm — they **are** a swarm's outputs, including its mistakes, redirects, and emergent compositions across agents that never talked directly.
 
-## Status
+## Status (2026-05-13)
 
-Early-stage. The synthesis on disk (`swarm-research/SYNTHESIS.md`) reads more confidently than its evidence currently supports — this is documented as the project's first operating-discipline finding ("premature crystallization") and the next session's first task is a **claims ledger** that tags every headline claim as `verified` / `reported-by-agent` / `speculative` / `experiment-required`.
+**End-to-end OCI deployment exercised.** Five-way comparison on a 20-node ER+chain toy graph, source → target with 5 ants × 3 cycles:
 
-What this means for a reader: the questions are real, the substrate is built, the headline experiment is well-defined, and the prior-art reconnaissance is broad. The novelty intersection is *plausible pending verification*, not confirmed.
+| Backend | Success | Wall | LLM calls |
+|---|---|---|---|
+| Heuristic ε-greedy | 9/15 | 0.68s | 0 |
+| **Heuristic + smart escalation (this design)** | **11/15** | **10m16s** | **43** |
+| Qwen-7B-Q4 on every step (via queen) | 11/15 | 24m34s | ~140 |
+| SmolLM2-360M-Q4 on every step (ant-local) | 3/15 | 28m49s | ~186 |
+| Haiku 4.5 via API (earlier laptop run) | 15/15 | ~30s | ~140 |
+
+Per-run logs and ledger-tagged findings in [`toy/runs/`](toy/runs/).
+
+**Falsified at toy scale:** SmolLM2-on-ants. The original spec had small LLMs running on the AMD micros; their 1/8 OCPU x86 cores can't run *any* LLM at ant-step rates that beat heuristic. SmolLM2-360M-Q4 was Pareto-dominated by both heuristic (cheaper *and* better) and queen-Qwen (better, same wall).
+
+**Validated at toy scale:** **heuristic + smart escalation.** Heuristic by default; LLM call only when (a) all neighbours visited, or (b) `len(path) >= 0.6 × max_steps` and target not adjacent. Matches Qwen-everywhere success at 2.4× speedup and 3.3× fewer LLM calls. The +2/15 win over pure heuristic is concentrated in **cycle 1 cold-start** (5/5 vs heuristic's 3/5) — LLM escalations seed the substrate with useful pheromone trails that later cycles' heuristic ants follow with zero escalations. The mental model is **"LLM-as-substrate-seeder"**, not "LLM-as-ant".
+
+Earlier note still applies: the broader novelty intersection in `swarm-research/SYNTHESIS.md` (φ-on-non-edges, dual-objective meta-loop, mycorrhizal markets, …) remains *plausible pending verification*. The headline-experiment design and 6-way novelty conjunction are unchanged by these toy-scale findings; what changed is the deployment shape that makes them empirically tractable.
 
 ## Where we're going next
 
 Concrete open lines of work (full descriptions in [`TASKS.md`](TASKS.md)):
 
-- **Step 0** — Add a *Claims Ledger* to `SYNTHESIS.md`: tag every headline claim as `verified` / `reported-by-agent` / `speculative` / `experiment-required`, demote language inline. Gates everything else.
+- **Step 0** — Claims ledger pass on `SYNTHESIS.md`: tag every headline claim as `verified` / `reported-by-agent` / `speculative` / `experiment-required`. Partially discharged by the ledger-tagged findings in `toy/runs/` and `oci/ANTS.md`; the synthesis-prose inventory pass remains owed.
 - **Step 1** — Spawn a meta-loop specialist over DSPy / GEPA / Sakana AI Scientist / AlphaEvolve / FunSearch. *Has anyone shown LLMs-as-ants rewriting their own coordination protocol with measurable self-improvement on the same problem?*
 - **Step 2** — Hetionet verification: confirm lithium → ALS is a recoverable held-out edge in v1.0, with sufficient metapaths remaining post-deletion.
 - **Step 3** — One-page claim diff vs ACO-ToT, Sherkat 2018, SwarmSys, ReEvo, CodeCRDT, LLM-MABS, AMRO-S, TxGNN. Reviewer-2 prevention.
-- **Step 4** — Build a 10-ant local file-stigmergy toy on a laptop (Haiku or Qwen2.5-3B, ~1000-node KG, mtime-as-strength). *Does file-based persistent stigmergy behave qualitatively differently from in-memory pheromone matrices?* Prerequisite for OCI deployment, not a substitute.
+- ~~**Step 4** — laptop file-stigmergy toy~~ → ✅ substrate primitive verified (2026-05-05); deployment exercised on OCI (2026-05-12 → 2026-05-13). See [`toy/`](toy/) and `toy/runs/`.
+- **Step 5 — Sub-plan escalation** (TASKS.md #16) — at escalation point, have the LLM return 3-5 steps as a sub-plan rather than one step. Predicted to push success above 11/15 by recovering the "wandered far" ants that step-by-step couldn't.
+- **Step 5 — Escalation budget per ant** (TASKS.md #17) — defensive cap before scaling to bigger graphs where escalation could explode.
+- **Step 5 — MMAS bounded reinforcement** (in toy backlog) — `τ_min/τ_max` bounds; best-so-far updates. Relevant for fairness on bigger experiments.
 - **Side: φ-on-non-edges canon audit** — verify "frustration pheromone on non-edges" has no prior construct in Dorigo & Stützle 2004 / MMAS / hyper-cube ACO / ACO_R / 2020–2026 surveys. If absent: stand-alone methods contribution.
 - **Side: engram self-citation reconciliation** — locate the prior knowledge-graph hole-finding project, determine whether it operationalised anything pheromone-on-absent-relation-like.
 
@@ -51,9 +68,17 @@ If any of these light you up: open an issue, start a discussion, or fork. The `E
 .
 ├── README.md                       (you are here)
 ├── CLAUDE.md                       orientation for AI collaborators
+├── TASKS.md                        durable in-repo task list
+├── oci/                            deployment record (queen + ant hosts on OCI)
+│   ├── QUEEN.md                    nick-mel A1 queen (Qwen-7B-Q4)
+│   └── ANTS.md                     ant-1 + ant-2 E2.1.Micro hosts
+├── toy/                            local + OCI experimental rig
+│   ├── colony.py                   single-file PEP 723 ant colony loop
+│   ├── README.md                   the five-way comparison + run index
+│   └── runs/                       per-run logs + ledger-tagged findings, dated
 └── swarm-research/
     ├── PROTOCOL.md                 substrate rules (deposit format, vocab, budget)
-    ├── SYNTHESIS.md                consolidated findings (over-confident — see ledger TODO)
+    ├── SYNTHESIS.md                consolidated findings + 2026-05-13 empirical update
     ├── territory.md                cartographer's map of the research space
     ├── findings/                   9 specialist agent reports (one per leg of the bet)
     └── pheromones/                 raw deposit log (the swarm's actual coordination signal)

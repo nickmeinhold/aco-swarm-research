@@ -5,16 +5,46 @@
 
 ---
 
-## Project vision (recap)
+## Project vision (recap, slightly sharpened 2026-05-13)
 
 LLM-as-ant ACO system where:
-- Local CPU LLMs (Qwen2.5-7B Q4 queen on ARM 24GB; heuristic ants + SmolLM2-360M on 4 × 1GB AMD micros) deployed on Oracle Cloud Free Tier
+- Heuristic ants on commodity hosts + a queen LLM (Qwen2.5-7B Q4 on ARM 24 GB) reached via **sparse smart-trigger escalation** — heuristic by default, LLM only when ants are stuck (cornered or wandering); deployed on Oracle Cloud Free Tier (1 × ARM A1 queen + up to 2 × AMD x86 micros as ant hosts; SmolLM2-360M on the micros is deferred per the 2026-05-13 falsification, see "Empirical update" below)
 - File-based stigmergy as substrate primitive (filesystem topology, mtime as pheromone strength)
 - Dual objective: (a) external — knowledge graph hole-finding for drug discovery / paper discovery (Hetionet, lithium → ALS as demo); (b) meta — colony researches its own coordination protocol
 - Adversarial "anteater" perturbation as first-class research methodology (not a demo gimmick)
 - Visualisation as part of the fitness function — humans-in-the-loop as co-located stigmergic agents
 
 Output goals: paper + demo/installation + deployable tool.
+
+---
+
+## Empirical update (2026-05-13) — what changed about the deployment shape
+
+Five runs of a 20-node ER+chain toy graph (5 ants × 3 cycles each, source → target) on the OCI free-tier hardware, captured in [`../toy/runs/`](../toy/runs/):
+
+| Backend | Success | Wall | LLM calls |
+|---|---|---|---|
+| Heuristic ε-greedy (mock) | 9/15 | 0.68s | 0 |
+| Heuristic + cornered-only escalation | 9/15 | 58.8s | 2 |
+| **Heuristic + smart escalation** | **11/15** | **10m16s** | **43** |
+| Qwen-7B-Q4 on every step (via queen private VCN) | 11/15 | 24m34s | ~140 |
+| SmolLM2-360M-Q4 on every step (ant-local) | 3/15 | 28m49s | ~186 |
+
+**What was falsified at toy scale:**
+
+- **SmolLM2-on-ants for ant-step decisions.** OCI `VM.Standard.E2.1.Micro` (1/8 OCPU x86, 1 GB RAM) is too compute-poor: per-call cost of a SmolLM2-360M-Q4 inference exceeds the queen's Qwen-7B-Q4 cost *despite a 20× smaller model*, and success is dominated by heuristic. The architecture spec's "small LLM ants on AMD micros" leg, in its strong form, is closed. See `feedback_octopus_brain_arm_falsified.md` in the auto-memory and [`toy/runs/2026-05-12-oci-run-3-smollm2.md`](../toy/runs/2026-05-12-oci-run-3-smollm2.md).
+- **"Queen↔ant bandwidth" as the load-bearing tunable.** Private-VCN hop latency is ~tens of ms; queen CPU compute is the actual scarce budget. The load-bearing tunable is **escalation frequency**, not network bandwidth.
+- **Smoke-test latency → workload latency** extrapolation. The 2026-05-06 smoke test said Qwen "1.09 s warm"; the toy ant-step workload saw ~10 s per call. Captured as `feedback_smoke_test_prompt_shape.md`.
+
+**What was validated at toy scale:**
+
+- **Heuristic + smart escalation** matches queen-everywhere quality at 2.4× speedup and 3.3× fewer LLM calls (11/15 success at 10m16s wall, 43 escalations vs Qwen-everywhere's ~140).
+- The **+2/15 win over pure heuristic is concentrated in cycle 1 cold-start.** Cycles 2-3 the heuristic alone does well — pheromone trails amplified by cycle-1 successes carry it. The LLM's load-bearing role is **seeding the substrate**, not making each ant-step decision.
+- The substrate primitives held up cleanly under all five runs (no corruption observed at N=5 ants × 3 cycles even with ~10-second-per-step async concurrency). The 2026-05-05 substrate-as-medium claim survives the deployment exercise.
+
+**The "LLM-as-substrate-seeder" reframe:** the substrate is the *carrier of LLM intelligence into a low-cost runtime*. Cheap heuristic ants follow trails that sparse LLM escalations laid down. This is a different conceptual move than "LLM-as-ant", and it sharpens novelty ingredient #1 below.
+
+These results do not invalidate the headline experiment (lithium → ALS on Hetionet via 2D anteater × evaporation phase diagram), the 6-way novelty conjunction, or the adversarial-methodology story. They sharpen the **deployment shape** that makes the experiment empirically tractable on free-tier hardware.
 
 ---
 
@@ -30,7 +60,7 @@ Output goals: paper + demo/installation + deployable tool.
 
 No individual element novel; the conjunction is.
 
-1. **File-based persistent stigmergy on heterogeneous compute** — OS-as-substrate (directory = topology, mtime = freshness, `touch`/`rm` = reinforce/evaporate), Tierra-style world-readable / author-writable membrane. Nobody has used the OS itself as pheromone substrate.
+1. **File-based persistent stigmergy on heterogeneous compute, with sparse LLM escalation as substrate seeder** — OS-as-substrate (directory = topology, mtime = freshness, `touch`/`rm` = reinforce/evaporate), Tierra-style world-readable / author-writable membrane. Heterogeneity is **in role**, not just hardware: heuristic ε-greedy ants on commodity micros lay most of the pheromone; a single queen LLM (Qwen-7B-Q4 on ARM) is consulted only when an ant gets stuck, and its main contribution is seeding the substrate during cold-start so heuristic ants can surf the trail in later cycles. Per the 2026-05-13 toy comparison this matches LLM-on-every-step success at 2.4× speedup. Nobody has framed pheromone substrate as "carrier of sparse LLM intelligence into a low-cost runtime" — pending verification.
 
 2. **Frustration pheromone φ on non-edges** (kg-holes' NOVEL flag) — pheromone deposited on *non-edges* the colony wishes existed; operationalises Burt 1992 *structural holes*. Biology has anti-pheromone (for bad existing edges, Robinson 2005 *Nature*); nobody has pheromone for absent edges. Cartographer flags this as **possibly a stand-alone ACO methods contribution** separable from the KG application — pending verification against deep ACO canon (Task #3).
 
@@ -53,8 +83,9 @@ budget    = per-agent mass-conserved (Flow-Lenia mass conservation)
 update    = bounded best-so-far reinforcement (MMAS — required for convergence proof)
 decay     = cron evaporator (passive) + gardener micro (active retraction, Physarum / Tero 2010)
 vocab     = per-agent drift; cartographer maintains translation table (against SwarmBench convergence trap)
-hosts     = Qwen2.5-7B Q4 queen on ARM 24GB; heuristic ants + SmolLM2-360M classifiers on 4×1GB micros
-bandwidth = queen↔micro channel cap (octopus brain↔arm — tunable knob, hypothesised sweet spot)
+hosts     = Qwen2.5-7B Q4 queen on ARM 24GB; heuristic ants on AMD x86 micros (SmolLM2-360M deferred per 2026-05-13 falsification — see Empirical update; viable on paid-tier or full-core hardware, not on E2.1.Micro 1/8-OCPU)
+escalate  = smart trigger: cornered OR (len(path) ≥ 0.6 × max_steps AND target not adjacent); LLM consulted only when ant is stuck. Load-bearing tunable: escalation frequency (NOT bandwidth, which is sub-ms on the VCN).
+bandwidth = queen↔micro channel cap (octopus brain↔arm — secondary knob; private-VCN latency ~tens of ms is not the bottleneck on current hardware)
 threshold = per-agent α/β/ρ distribution (quorum-sensing bet-hedging — Weber & Buceta 2013)
 reputation= depositor weight discounted by trail-grading downstream
 membrane  = world-readable / author-writable (Tierra leak as feature, not bug)
@@ -120,13 +151,20 @@ Then:
 
 ---
 
-## Pending tasks (to recreate in next session)
+## Pending tasks (canonical source: [`../TASKS.md`](../TASKS.md))
 
-- #2 Spawn meta-loop specialist agent (DSPy / GEPA / Sakana)
-- #3 Verify φ-on-non-edges absence in deep ACO canon
-- #4 Confirm Hetionet has recoverable lithium → ALS demo case
-- #5 Write one-page claim diff vs nearest prior art
-- #6 Build 10-ant local file-stigmergy toy (laptop, no OCI)
-- #7 Reconcile engram prior-work as self-citation
+Original 2026-05-03 task list:
+- #2 Spawn meta-loop specialist agent (DSPy / GEPA / Sakana) — pending
+- #3 Verify φ-on-non-edges absence in deep ACO canon — pending
+- #4 Confirm Hetionet has recoverable lithium → ALS demo case — pending
+- #5 Write one-page claim diff vs nearest prior art — pending
+- #6 Build 10-ant local file-stigmergy toy — ✅ done 2026-05-05 + extended to OCI 2026-05-12/13; see [`../toy/`](../toy/)
+- #7 Reconcile engram prior-work as self-citation — pending
 
-Full descriptions captured in pending-tasks.json by `/consolidate` — until then they live in the active TaskList only.
+OCI-deployment tasks added 2026-05-12 → 2026-05-13:
+- #8 Toy run on OCI (Qwen via queen private VCN) — ✅ done [`../toy/runs/2026-05-12-oci-run-1.md`](../toy/runs/2026-05-12-oci-run-1.md)
+- #9 SmolLM2 on ants — ✅ closed no-go [`../toy/runs/2026-05-12-oci-run-3-smollm2.md`](../toy/runs/2026-05-12-oci-run-3-smollm2.md)
+- #15 Heuristic+escalation prototype — ✅ done [`../toy/runs/2026-05-13-oci-run-5-smart-escalate.md`](../toy/runs/2026-05-13-oci-run-5-smart-escalate.md)
+- #16 Sub-plan escalation (LLM returns 3-5 steps) — pending
+- #17 Escalation budget per ant on bigger graphs — pending
+- #10/#11/#12/#13/#14 — side hygiene; full descriptions in `TASKS.md`
