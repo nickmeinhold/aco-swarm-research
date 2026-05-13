@@ -192,9 +192,18 @@ def heuristic_step(current, target, neighbours_with_str, path):
     return max(options, key=lambda x: x[1] + random.random() * 0.05)[0]
 
 
-async def run_ant(ant_id, kg, source, target, max_steps, client, mock):
+async def run_ant(ant_id, kg, source, target, max_steps, client, mock, escalate):
+    """Walk an ant from source toward target.
+
+    Modes:
+      - mock=True: heuristic ε-greedy every step. No LLM.
+      - mock=False, escalate=False, client set: LLM every step (run 1 shape).
+      - mock=False, escalate=True, client set: heuristic by default; escalate
+        to LLM only when cornered (all neighbours visited). TASKS.md #15.
+    """
     path = [source]
     current = source
+    escalations = 0
     for _ in range(max_steps):
         if current == target:
             break
@@ -206,13 +215,20 @@ async def run_ant(ant_id, kg, source, target, max_steps, client, mock):
         # (Qwen-7B-Q4 produced n12→n3→n12→n3 loops in 2026-05-12-oci-run-1). Only
         # relax the filter when every neighbour has been seen — "cornered" mode.
         visited = set(path)
-        nbrs_visible = [n for n in nbrs if n not in visited] or nbrs
+        nbrs_unvisited = [n for n in nbrs if n not in visited]
+        cornered = not nbrs_unvisited
+        nbrs_visible = nbrs if cornered else nbrs_unvisited
         nbrs_str = [(n, strength(edge_key(current, n))) for n in nbrs_visible]
         try:
-            if mock:
+            if mock or client is None:
+                nxt = heuristic_step(current, target, nbrs_str, path)
+            elif escalate and not cornered:
+                # Heuristic-on-ant: cheap default decision, save the LLM for stuck cases.
                 nxt = heuristic_step(current, target, nbrs_str, path)
             else:
+                # All-LLM (escalate=False) OR escalation-on-cornered: defer to the LLM.
                 nxt = await llm_step(client, current, target, nbrs_str, path)
+                escalations += 1
             if nxt not in nbrs_visible:
                 # LLM returned a node outside what we showed it (hallucination or a
                 # filtered visited revisit). Fall back to highest pheromone among
@@ -228,22 +244,24 @@ async def run_ant(ant_id, kg, source, target, max_steps, client, mock):
     if success:
         for a, b in zip(path, path[1:]):
             deposit(edge_key(a, b), ant_id, quality)
-    return {"ant": ant_id, "path": path, "success": success, "quality": quality}
+    return {"ant": ant_id, "path": path, "success": success, "quality": quality, "escalations": escalations}
 
 
 # --- Colony loop ---
-async def run_cycle(cycle_n, n_ants, kg, source, target, max_steps, client, mock):
+async def run_cycle(cycle_n, n_ants, kg, source, target, max_steps, client, mock, escalate):
     print(f"\n=== Cycle {cycle_n} ===")
     tasks = [
-        run_ant(f"a{i}", kg, source, target, max_steps, client, mock)
+        run_ant(f"a{i}", kg, source, target, max_steps, client, mock, escalate)
         for i in range(n_ants)
     ]
     results = await asyncio.gather(*tasks)
     for r in results:
         marker = "OK  " if r["success"] else "FAIL"
-        print(f"  [{marker}] {r['ant']} q={r['quality']:.3f} len={len(r['path']):2d} path={'->'.join(r['path'])}")
+        esc = f" esc={r['escalations']}" if r.get('escalations') else ""
+        print(f"  [{marker}] {r['ant']} q={r['quality']:.3f} len={len(r['path']):2d}{esc} path={'->'.join(r['path'])}")
     n_ok = sum(1 for r in results if r["success"])
-    print(f"  Cycle {cycle_n}: {n_ok}/{n_ants} reached target")
+    n_esc = sum(r.get("escalations", 0) for r in results)
+    print(f"  Cycle {cycle_n}: {n_ok}/{n_ants} reached target  ({n_esc} escalations)")
     return results
 
 
@@ -273,6 +291,8 @@ async def main():
     p.add_argument("--queen-url", default="http://10.0.0.4:11434",
                    help="ollama HTTP base URL (default: queen private IP)")
     p.add_argument("--queen-model", default="qwen2.5:7b-instruct-q4_K_M")
+    p.add_argument("--escalate", action="store_true",
+                   help="heuristic by default, escalate to LLM only when cornered (TASKS.md #15)")
     p.add_argument("--reset", action="store_true", help="wipe substrate before run")
     p.add_argument("--ants", type=int, default=5)
     p.add_argument("--cycles", type=int, default=3)
@@ -304,7 +324,7 @@ async def main():
 
     all_results = []
     for c in range(1, args.cycles + 1):
-        results = await run_cycle(c, args.ants, kg, source, target, args.max_steps, client, args.mock)
+        results = await run_cycle(c, args.ants, kg, source, target, args.max_steps, client, args.mock, args.escalate)
         all_results.append(results)
         removed = evaporate(max_age_sec=600)
         if removed:
@@ -314,7 +334,9 @@ async def main():
     n_total_ok = sum(r["success"] for cycle in all_results for r in cycle)
     n_total = args.cycles * args.ants
     n_dep_files = sum(1 for _ in ROOT.glob("*/*.dep"))
-    print(f"\n=== Summary: {n_total_ok}/{n_total} successful, {n_dep_files} deposit files on disk ===")
+    n_esc = sum(r.get("escalations", 0) for cycle in all_results for r in cycle)
+    esc_str = f", {n_esc} LLM escalations" if args.escalate else ""
+    print(f"\n=== Summary: {n_total_ok}/{n_total} successful, {n_dep_files} deposit files on disk{esc_str} ===")
 
 
 if __name__ == "__main__":
