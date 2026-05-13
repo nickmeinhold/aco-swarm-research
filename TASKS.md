@@ -214,21 +214,38 @@ Status: pending. Idle-reclamation defense.
 
 Ants got the keep-alive cron from cloud-init (`/opt/keep-alive.sh` every 6h). Queen never got one — risk if the Melbourne tenancy is subject to idle reclamation (unclear). Install the same script on `nick-mel` via SSH; one-line crontab entry.
 
-### #15 Prototype heuristic-on-ant + queen-escalation-on-stuck (NEW 2026-05-12)
+### #15 Prototype heuristic-on-ant + queen-escalation-on-stuck
 
-Status: pending — the architecturally honest follow-up to #9's no-go finding.
+Status: **completed 2026-05-13.** Two phases run; positive evidence captured.
 
-Modify `toy/colony.py` so each ant runs heuristic ε-greedy by default and only escalates to queen-Qwen when (a) it loops (current node already in path AND best-pheromone neighbour is also in path), or (b) pheromone strengths on all visible neighbours are below a threshold (cold-start case). One LLM call per escalation, not per step.
+- **Phase A (cornered-only trigger):** `toy/runs/2026-05-13-oci-run-4-heuristic-escalate.md` — matched queen-everywhere success (9/15) at 25× speedup and 70× fewer LLM calls. Did not improve on heuristic.
+- **Phase B (smart trigger = cornered OR long-path-without-target):** `toy/runs/2026-05-13-oci-run-5-smart-escalate.md` — **11/15 success, 10m16s wall, 43 LLM escalations.** Matches Qwen-everywhere at 2.4× speedup; beats heuristic by +2/15. Cycle 1 went 5/5 (vs heuristic-alone 3/5) — the LLM's main role is **seeding the substrate**, not making each ant decision.
+- Conceptual win: "LLM-as-substrate-seeder" reframe (see run 5 Finding 3). Suggests SYNTHESIS.md novelty story should be sharpened.
 
-Predicted behaviour (`speculative` until run):
-- Success rate ≥ heuristic baseline (escalation helps in cold-start)
-- Wall time closer to heuristic than to all-LLM (escalation is rare past cycle 1)
-- Queen-CPU usage drops by ~10×, since not every step hits it
-- Substrate's primary role becomes clearer — it carries the heuristic decisions and the queen's escalation decisions in the same coordinate system
+Follow-up tasks unlocked by these runs:
 
-Acceptance: 5×3 toy run on same 20-node KG; report success rate, wall time, and escalation-call count. Tag results with ledger discipline as a new `toy/runs/2026-05-12-oci-run-4-heuristic-escalate.md`.
+- **README + SYNTHESIS.md rewrite** to reflect the architectural pivot (project-identity-level — needs Nick's eyes)
+- **Sub-plan escalation** (run 5 Finding 4) — LLM returns 3-5 steps not 1
+- **Escalation budget per ant** (run 5 Finding 5) — prevent explosion on bigger graphs
+- **MMAS bounds** (run 4 Finding 3) — was already in toy/README backlog; smart-trigger run 5 made it less urgent but still relevant for fairness on bigger experiments
 
-This is now the **load-bearing experiment** — its result (positive or negative) directly resolves whether the OCI free-tier project is viable as currently scoped.
+### #16 Sub-plan escalation — LLM returns 3-5 steps not 1 (NEW 2026-05-13)
+
+Status: pending — emerged from run 5 Finding 4.
+
+When the smart trigger fires, the current design has the LLM return a single next-step. Cycle 2 a0/a1 and cycle 3 a3/a4 each escalated 5-6 times and still failed — step-by-step LLM picks couldn't undo cumulative wrong turns.
+
+Replace: pass full path + neighbour structure to LLM, ask for the next 3-5 steps as a sub-plan. Validate steps against the graph; fall through to single-step heuristic for any invalid step. Saves LLM round-trips and lets the LLM plan a coherent recovery.
+
+Acceptance: re-run smart-escalate on the same 20-node KG with sub-plan mode; success rate ≥ 11/15 and escalation count down.
+
+### #17 Escalation budget per ant on bigger graphs (NEW 2026-05-13)
+
+Status: pending — bigger-graph safety. Emerged from run 5 Finding 5.
+
+On the 20-node toy, smart-trigger produced 43 escalations across 15 ants (~3 per ant). On a 1000-node Hetionet subset with max_steps probably 30-50, a failing ant could escalate 20-30 times. Need either (a) a hard cap per ant per cycle, (b) a budget shared across the colony, or (c) an exponential back-off on repeated escalations from the same ant.
+
+Acceptance: rerun smart-escalate on a small graph with the cap, confirm success rate unchanged at small N; surface cap as a CLI flag for tuning.
 
 ### #14 Migrate ollama-unit backup off /tmp
 

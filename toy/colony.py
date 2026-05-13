@@ -192,18 +192,23 @@ def heuristic_step(current, target, neighbours_with_str, path):
     return max(options, key=lambda x: x[1] + random.random() * 0.05)[0]
 
 
-async def run_ant(ant_id, kg, source, target, max_steps, client, mock, escalate):
+async def run_ant(ant_id, kg, source, target, max_steps, client, mock, escalate, escalate_trigger):
     """Walk an ant from source toward target.
 
     Modes:
       - mock=True: heuristic ε-greedy every step. No LLM.
       - mock=False, escalate=False, client set: LLM every step (run 1 shape).
       - mock=False, escalate=True, client set: heuristic by default; escalate
-        to LLM only when cornered (all neighbours visited). TASKS.md #15.
+        to LLM when stuck. Trigger:
+          - 'cornered' — escalate only when all neighbours visited (run 4)
+          - 'smart' — escalate on cornered OR (len(path) >= 0.6*max_steps AND
+            target not in current neighbours). Earlier triggers catch the
+            "wandering far" case before the deadlock. TASKS.md #15 followup.
     """
     path = [source]
     current = source
     escalations = 0
+    near_max_steps_threshold = int(max_steps * 0.6)
     for _ in range(max_steps):
         if current == target:
             break
@@ -219,14 +224,21 @@ async def run_ant(ant_id, kg, source, target, max_steps, client, mock, escalate)
         cornered = not nbrs_unvisited
         nbrs_visible = nbrs if cornered else nbrs_unvisited
         nbrs_str = [(n, strength(edge_key(current, n))) for n in nbrs_visible]
+        # Decide whether to escalate this step.
+        if escalate_trigger == "smart":
+            should_escalate = cornered or (
+                len(path) >= near_max_steps_threshold and target not in nbrs
+            )
+        else:  # 'cornered'
+            should_escalate = cornered
         try:
             if mock or client is None:
                 nxt = heuristic_step(current, target, nbrs_str, path)
-            elif escalate and not cornered:
+            elif escalate and not should_escalate:
                 # Heuristic-on-ant: cheap default decision, save the LLM for stuck cases.
                 nxt = heuristic_step(current, target, nbrs_str, path)
             else:
-                # All-LLM (escalate=False) OR escalation-on-cornered: defer to the LLM.
+                # All-LLM (escalate=False) OR escalation-triggered: defer to the LLM.
                 nxt = await llm_step(client, current, target, nbrs_str, path)
                 escalations += 1
             if nxt not in nbrs_visible:
@@ -248,10 +260,10 @@ async def run_ant(ant_id, kg, source, target, max_steps, client, mock, escalate)
 
 
 # --- Colony loop ---
-async def run_cycle(cycle_n, n_ants, kg, source, target, max_steps, client, mock, escalate):
+async def run_cycle(cycle_n, n_ants, kg, source, target, max_steps, client, mock, escalate, escalate_trigger):
     print(f"\n=== Cycle {cycle_n} ===")
     tasks = [
-        run_ant(f"a{i}", kg, source, target, max_steps, client, mock, escalate)
+        run_ant(f"a{i}", kg, source, target, max_steps, client, mock, escalate, escalate_trigger)
         for i in range(n_ants)
     ]
     results = await asyncio.gather(*tasks)
@@ -292,7 +304,10 @@ async def main():
                    help="ollama HTTP base URL (default: queen private IP)")
     p.add_argument("--queen-model", default="qwen2.5:7b-instruct-q4_K_M")
     p.add_argument("--escalate", action="store_true",
-                   help="heuristic by default, escalate to LLM only when cornered (TASKS.md #15)")
+                   help="heuristic by default, escalate to LLM only when stuck (TASKS.md #15)")
+    p.add_argument("--escalate-trigger", choices=["cornered", "smart"], default="cornered",
+                   help="escalation trigger: 'cornered' (all neighbours visited, default = run 4) "
+                        "or 'smart' (cornered OR len(path)>=0.6*max_steps AND target not in nbrs)")
     p.add_argument("--reset", action="store_true", help="wipe substrate before run")
     p.add_argument("--ants", type=int, default=5)
     p.add_argument("--cycles", type=int, default=3)
@@ -324,7 +339,7 @@ async def main():
 
     all_results = []
     for c in range(1, args.cycles + 1):
-        results = await run_cycle(c, args.ants, kg, source, target, args.max_steps, client, args.mock, args.escalate)
+        results = await run_cycle(c, args.ants, kg, source, target, args.max_steps, client, args.mock, args.escalate, args.escalate_trigger)
         all_results.append(results)
         removed = evaporate(max_age_sec=600)
         if removed:

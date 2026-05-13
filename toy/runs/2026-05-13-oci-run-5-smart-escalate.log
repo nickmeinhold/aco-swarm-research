@@ -1,0 +1,59 @@
+KG: 20 nodes, source=n0, target=n19
+  source (n0) neighbours: ['n1', 'n16', 'n2', 'n3', 'n5']
+  target (n19) neighbours: ['n11', 'n18', 'n8']
+  TAU=60.0s, ants/cycle=5, cycles=3, max_steps=12, mock=False
+  backend: queen @ http://10.0.0.4:11434 model=qwen2.5:7b-instruct-q4_K_M
+
+=== Cycle 1 ===
+  [OK  ] a0 q=0.100 len=10 esc=2 path=n0->n1->n2->n18->n8->n4->n3->n12->n11->n19
+  [OK  ] a1 q=0.091 len=11 esc=3 path=n0->n16->n15->n14->n7->n8->n4->n3->n12->n11->n19
+  [OK  ] a2 q=0.091 len=11 esc=2 path=n0->n2->n3->n17->n6->n5->n4->n7->n8->n18->n19
+  [OK  ] a3 q=0.077 len=13 esc=5 path=n0->n1->n13->n10->n9->n8->n7->n14->n15->n16->n17->n18->n19
+  [OK  ] a4 q=0.200 len= 5 path=n0->n16->n17->n18->n19
+  Cycle 1: 5/5 reached target  (12 escalations)
+  Top pheromone edges:
+    n7__n8: strength=0.152  deposits=3
+    n18__n19: strength=0.121  deposits=3
+    n14__n15: strength=0.119  deposits=2
+    n14__n7: strength=0.119  deposits=2
+    n15__n16: strength=0.119  deposits=2
+    n0__n1: strength=0.100  deposits=2
+    n16__n17: strength=0.088  deposits=2
+    n17__n18: strength=0.088  deposits=2
+
+=== Cycle 2 ===
+  [FAIL] a0 q=0.000 len=13 esc=5 path=n0->n2->n1->n13->n10->n9->n8->n7->n14->n15->n16->n17->n3
+  [FAIL] a1 q=0.000 len=13 esc=6 path=n0->n1->n13->n10->n9->n8->n7->n14->n15->n16->n17->n3->n4
+  [OK  ] a2 q=0.100 len=10 esc=1 path=n0->n1->n13->n12->n3->n4->n7->n8->n18->n19
+  [OK  ] a3 q=0.083 len=12 esc=3 path=n0->n5->n4->n3->n17->n16->n15->n14->n7->n8->n18->n19
+  [OK  ] a4 q=0.091 len=11 esc=3 path=n0->n1->n13->n10->n6->n5->n4->n3->n12->n11->n19
+  Cycle 2: 3/5 reached target  (18 escalations)
+  Top pheromone edges:
+    n3__n4: strength=0.043  deposits=5
+    n4__n5: strength=0.039  deposits=3
+    n0__n1: strength=0.029  deposits=4
+    n1__n13: strength=0.029  deposits=3
+    n12__n3: strength=0.029  deposits=4
+    n10__n13: strength=0.025  deposits=2
+    n11__n12: strength=0.025  deposits=3
+    n11__n19: strength=0.025  deposits=3
+
+=== Cycle 3 ===
+  [OK  ] a0 q=0.100 len=10 esc=2 path=n0->n1->n13->n14->n7->n8->n9->n10->n11->n19
+  [OK  ] a1 q=0.143 len= 7 path=n0->n5->n4->n3->n12->n11->n19
+  [OK  ] a2 q=0.143 len= 7 path=n0->n5->n4->n3->n12->n11->n19
+  [FAIL] a3 q=0.000 len=13 esc=5 path=n0->n1->n13->n10->n11->n12->n3->n4->n5->n6->n7->n8->n9
+  [FAIL] a4 q=0.000 len=13 esc=6 path=n0->n2->n1->n13->n10->n11->n12->n3->n4->n5->n6->n7->n8
+  Cycle 3: 3/5 reached target  (13 escalations)
+  evaporator: removed 4 stale deposits
+  Top pheromone edges:
+    n11__n19: strength=0.027  deposits=6
+    n0__n1: strength=0.015  deposits=5
+    n1__n13: strength=0.015  deposits=4
+    n3__n4: strength=0.015  deposits=7
+    n4__n5: strength=0.014  deposits=5
+    n7__n8: strength=0.014  deposits=6
+    n14__n7: strength=0.014  deposits=4
+    n12__n3: strength=0.014  deposits=6
+
+=== Summary: 11/15 successful, 92 deposit files on disk, 43 LLM escalations ===
