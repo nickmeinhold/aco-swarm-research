@@ -45,6 +45,29 @@ Per-run logs and ledger-tagged findings in [`toy/runs/`](toy/runs/).
 
 Earlier note still applies: the broader novelty intersection in `swarm-research/SYNTHESIS.md` (φ-on-non-edges, dual-objective meta-loop, mycorrhizal markets, …) remains *plausible pending verification*. The headline-experiment design and 6-way novelty conjunction are unchanged by these toy-scale findings; what changed is the deployment shape that makes them empirically tractable.
 
+**Important caveat: n=1.** All five rows in the table above are from a single 20-node toy run each. The single most-load-bearing next experiment is **replicating run 5 across multiple seeds** to get variance bounds on the +2/15 win (`TASKS.md` #18). Don't treat the pivot as settled until that lands.
+
+## Operating-discipline lessons earned
+
+The research method (LLM-driven multi-agent coordination through file-stigmergy) is itself part of the research output. Lessons captured in the auto-memory at `~/.claude/projects/-Users-nick-git-experiments-aco/memory/`, grouped into two clusters:
+
+**Original cluster (2026-05-04 → 2026-05-06):**
+
+- **`feedback_premature_crystallization.md`** — agent reports → architecture → novelty claim → project identity in nine minutes with zero verification gates. Tag claims at the moment they're first made.
+- **`feedback_synthesis_to_disk.md`** — load-bearing synthesis is a deliverable, not a conversation artifact. Write to file as it forms.
+- **`feedback_appetite_vs_guardrails.md`** — Nick authorises appetite; the AI side still owns operational guardrails.
+- **`feedback_durable_capture_before_shelving.md`** — when shelving, enumerate transient state and verify each has a durable home. Discovered when TASKS.md was 5 days stale because our 2026-05-06 session never ran `/consolidate`.
+- **`feedback_pre_action_tripwires.md`** — generalisation: structural diagnosis of "the loop relies on Nick's spot-checks rather than pre-action verification". Before publish / deploy / claiming "fresh" — run check Y.
+
+**OCI-reality-vs-spec cluster (2026-05-06 → 2026-05-13) — three architectural assumptions demoted by hardware-on-hardware evidence:**
+
+- **`feedback_oci_quota_vs_spec.md`** — "4 micros" → "2 micros" against actual free-tier quota.
+- **`feedback_oci_intra_subnet_reachability.md`** — OCI private-VCN exposure needs TWO rules (cloud SL + host iptables, default Ubuntu trailing REJECT). `No route to host` after the cloud-SL fix is diagnostic gold, not a routing issue.
+- **`feedback_smoke_test_prompt_shape.md`** — single-curl "1.09s warm" smoke test didn't predict 10s ant-step workload latency. Match smoke-test prompt shape to workload.
+- **`feedback_octopus_brain_arm_falsified.md`** — SmolLM2-on-ants is dominated on free-tier 1/8-OCPU hardware. The architectural pivot anchor.
+
+Pattern: **before claiming X, run check Y at the moment of claim**, not retrospectively. The OCI cluster is three more instances of this shape (verify quota / verify reachability / verify hardware).
+
 ## Where we're going next
 
 Concrete open lines of work (full descriptions in [`TASKS.md`](TASKS.md)):
@@ -54,11 +77,17 @@ Concrete open lines of work (full descriptions in [`TASKS.md`](TASKS.md)):
 - **Step 2** — Hetionet verification: confirm lithium → ALS is a recoverable held-out edge in v1.0, with sufficient metapaths remaining post-deletion.
 - **Step 3** — One-page claim diff vs ACO-ToT, Sherkat 2018, SwarmSys, ReEvo, CodeCRDT, LLM-MABS, AMRO-S, TxGNN. Reviewer-2 prevention.
 - ~~**Step 4** — laptop file-stigmergy toy~~ → ✅ substrate primitive verified (2026-05-05); deployment exercised on OCI (2026-05-12 → 2026-05-13). See [`toy/`](toy/) and `toy/runs/`.
-- **Step 5 — Sub-plan escalation** (TASKS.md #16) — at escalation point, have the LLM return 3-5 steps as a sub-plan rather than one step. Predicted to push success above 11/15 by recovering the "wandered far" ants that step-by-step couldn't.
-- **Step 5 — Escalation budget per ant** (TASKS.md #17) — defensive cap before scaling to bigger graphs where escalation could explode.
-- **Step 5 — MMAS bounded reinforcement** (in toy backlog) — `τ_min/τ_max` bounds; best-so-far updates. Relevant for fairness on bigger experiments.
-- **Side: φ-on-non-edges canon audit** — verify "frustration pheromone on non-edges" has no prior construct in Dorigo & Stützle 2004 / MMAS / hyper-cube ACO / ACO_R / 2020–2026 surveys. If absent: stand-alone methods contribution.
-- **Side: engram self-citation reconciliation** — locate the prior knowledge-graph hole-finding project, determine whether it operationalised anything pheromone-on-absent-relation-like.
+- **Step 5 — Sub-plan escalation** (TASKS.md #16) — at escalation point, have the LLM return 3-5 steps as a sub-plan rather than one step. Predicted to push success above 11/15.
+- **Step 5 — Escalation budget per ant** (TASKS.md #17) — defensive cap before scaling to bigger graphs.
+- **Step 6 — Validation of the architectural pivot** (TASKS.md #18–#21) — the pivot is anchored on **n=1**. Highest-leverage next experiments:
+  - **#18 Replicate run 5 across multiple seeds** for variance bounds on the +2/15 gain. **Single most-load-bearing next move.**
+  - **#19 Bigger-graph (50–100 node) test** — does the cycle-1 cold-start mechanism scale?
+  - **#20 Bandwidth-throttling experiment** (tc qdisc) — falsifies or confirms the "escalation frequency is the tunable, not bandwidth" claim.
+  - **#21 Cycle-1-only escalation** — further evidence for the LLM-as-substrate-seeder reading.
+- **Step 7 — Algorithmic improvements** (TASKS.md #22–#25) — MMAS bounded reinforcement, parameterised TAU, concurrency stress test, in-memory matrix comparison rig.
+- **Side: φ-on-non-edges canon audit** (TASKS.md #2) — verify "frustration pheromone on non-edges" has no prior construct in Dorigo & Stützle 2004 / MMAS / hyper-cube ACO / ACO_R / 2020–2026 surveys. If absent: stand-alone methods contribution.
+- **Side: engram self-citation reconciliation** (TASKS.md #6) — locate the prior knowledge-graph hole-finding project, determine whether it operationalised anything pheromone-on-absent-relation-like.
+- **Hygiene** (TASKS.md #26–#28) — ant-2 fate + ant-1 ollama cleanup; revise `feedback_llm_as_anti_diversity_prior.md` per run 5; capture python-print-block-buffering tripwire as memory.
 
 If any of these light you up: open an issue, start a discussion, or fork. The `Explore` and the `cage-match` are both welcome.
 

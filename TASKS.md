@@ -255,6 +255,101 @@ Backup of the queen's pre-rebind ollama systemd unit is at `/tmp/ollama-unit-bef
 
 ---
 
+## Step 6 — Validation of the architectural pivot (NEW 2026-05-13 evening)
+
+The pivot from "1 queen + 4 ant-LLMs" to "heuristic + smart-escalation" is currently anchored on **n=1** toy run (run 5). Before treating it as settled, replicate and stress-test. Of these, **#18 is the single most-load-bearing** — without variance evidence, the +2/15 win could be noise.
+
+### #18 Replicate run-5 across multiple seeds
+
+Status: pending — **highest priority for next session.**
+
+Same config as run 5 (`--queen --escalate --escalate-trigger smart --reset`, 5 ants × 3 cycles × 20 nodes, max_steps=12) but with `--seed` varied. Need to add a `--seed` CLI flag to `colony.py` first (currently `make_kg` uses seed=42 hardcoded; the heuristic uses global `random` module unseeded).
+
+Acceptance: ≥5 runs at distinct seeds. Report success-rate distribution (mean ± stdev, median, range). If the +2/15 gain has stdev > 1.5, the architectural-pivot claim needs softening.
+
+### #19 Bigger-graph test (50-100 nodes)
+
+Status: pending — second priority after #18.
+
+Generate a 50–100 node ER+chain graph (same `make_kg` template, scaled). Rerun all five backends at appropriate `max_steps` (probably 30-50). Tests whether the cycle-1 cold-start mechanism that drove run 5's +2/15 transfers to bigger graphs where the heuristic has more room to wander.
+
+Predicted (`speculative`): smart-escalate continues to dominate, but the escalation count grows faster than linearly (more wandering ants per cycle). The escalation budget cap (#17) may become load-bearing before this scale.
+
+### #20 Bandwidth-throttling experiment
+
+Status: pending. **Falsifies or confirms** the README+SYNTHESIS+CLAUDE claim that "escalation frequency is the load-bearing tunable, not network bandwidth".
+
+Use `tc qdisc add dev eth0 root tbf` on ant-1 to throttle ant→queen TCP at 10 kbps / 100 kbps / 1 Mbps / unthrottled. Rerun smart-escalate at each setting. If success and wall are invariant under throttling, the claim is solid. If they degrade meaningfully at low bandwidth, the framing needs revisiting.
+
+This is the experiment most directly tied to the project-pitch rewrite. Doing it early gives the new framing real empirical anchor.
+
+### #21 Cycle-1-only escalation test
+
+Status: pending. Further evidence for the "LLM-as-substrate-seeder" mechanism reading.
+
+Add a `--escalate-cycle-cap N` flag. With cap=1, the LLM is only consulted during cycle 1; cycles 2+ run pure heuristic. If the "seeder" reading is right, this should match run 5's 11/15 at lower queen-CPU cost. If it doesn't, the run-5 cycle-by-cycle breakdown was misleading.
+
+---
+
+## Step 7 — Algorithmic improvements (NEW 2026-05-13 evening)
+
+Substrate / algorithm work that survives the pivot and may compose well with smart-escalation.
+
+### #22 MMAS bounded reinforcement
+
+Status: pending. Was in `toy/README.md` open-followups since 2026-05-05; now formal task.
+
+Add τ_min and τ_max bounds to the substrate strength calculation; only best-so-far ants deposit. Addresses run 4 Finding 3 (classical AS premature convergence onto suboptimal trunk in cycle 3). MMAS reference: Stützle & Hoos 2000.
+
+After landing, rerun smart-escalate to see if cycle 2-3 success improves (currently 3/5 each; could go to 4-5/5 if trunk-lock-in is reduced) and overall success climbs above 11/15.
+
+### #23 Parameterize TAU and scale with call latency
+
+Status: pending. Small change (~10 lines).
+
+Run 3 Finding 3: hardcoded `TAU = 60.0` breaks at slow LLM calls — pheromones decay during a cycle if calls are slow. Make TAU a CLI flag (`--tau`); optionally auto-scale at startup based on a calibration call (`TAU = 5-10 × per-call wall`). Useful for any future experiment that varies model size or hardware.
+
+### #24 Concurrency stress test at N=50+ ants
+
+Status: pending. Substrate primitive stress test.
+
+Push `--ants` from 5 to 50-100 (with `--mock` so ant policy isn't the variable). Look for deposit-file corruption, read-during-write inconsistencies, filesystem inode pressure. Substrate has been clean at N=5; we need to know where it breaks.
+
+### #25 In-memory pheromone matrix comparison rig
+
+Status: pending. **Closes the original Task #5 load-bearing question.**
+
+Add `--in-memory` mode where pheromones live in a `dict[str, list[deposit]]` not on disk. Run heuristic + smart-escalate at both `--in-memory` and `--filesubstrate`. Compare success, wall, convergence shape. If file-substrate behaves qualitatively differently from in-memory matrices (more noise = more diversity? less noise = stronger convergence?), this is where it shows.
+
+This was the original Task #5 question (2026-05-04) that the OCI runs partially side-stepped. Worth answering directly.
+
+---
+
+## Hygiene / cleanup (NEW 2026-05-13)
+
+### #26 Decide ant-2 fate + ant-1 ollama cleanup
+
+Status: pending. Memory-budget hygiene on free-tier ants.
+
+- **ant-2** was provisioned 2026-05-06 with cloud-init keep-alive but never used. Options: (a) leave running for #19 bigger-graph experiments (will use both ants in parallel), (b) shut down to reclaim free-tier slot, (c) repurpose as second substrate replica.
+- **ant-1** has ollama + `smollm2:360m` (725 MB) + `smollm2:360m-instruct-q4_K_M` (270 MB) installed but architecture says heuristic-only. Options: (a) `ollama rm` both models and `systemctl disable --now ollama` to reclaim 1 GB disk + free 487 MB RAM headroom, (b) keep installed for future paid-tier experiments.
+
+Document the decision in `oci/ANTS.md`.
+
+### #27 Revise `feedback_llm_as_anti_diversity_prior.md` memory entry
+
+Status: pending. Memory hygiene post-pivot.
+
+Entry was written 2026-05-06 based on Haiku ants over-converging on laptop toy. Run 5 (Qwen-7B-Q4 via sparse smart-escalation) showed LLMs contributing *diversity in seeding*, not over-exploitation. Revise to: **LLM effect depends on call frequency** — 100% (Qwen-everywhere) converges hard; 14% (smart trigger) diversifies; 0% (heuristic) is absent. Pointed at by run 5 Findings 3 + 7.
+
+### #28 Capture python-print-block-buffering as a tripwire memory
+
+Status: pending. Small.
+
+Python `print()` block-buffers when stdout is piped (tee, ssh, redirection). For long-running scripts on remote hosts (our SSH-tee pattern during runs), the log appears empty until the process exits, making "is it stuck?" indistinguishable from "is it running?". Fix: `python -u`, or `PYTHONUNBUFFERED=1`, or `flush=True` on prints. Write as `feedback_python_print_buffering.md` — short, links to `feedback_pre_action_tripwires.md`.
+
+---
+
 ## Completed (2026-05-06)
 
 ### OCI ant host provisioning + private-VCN smoke test
