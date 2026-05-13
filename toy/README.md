@@ -43,17 +43,32 @@ This is the classical [Ant System](https://en.wikipedia.org/wiki/Ant_colony_opti
 
 ## Status
 
-Initial substrate primitive verified 2026-05-05. OCI deployment exercised 2026-05-12. See [`runs/`](runs/) for per-run findings (raw logs + ledger-tagged analysis).
+Initial substrate primitive verified 2026-05-05. OCI deployment exercised 2026-05-12 → 2026-05-13. See [`runs/`](runs/) for per-run findings (raw logs + ledger-tagged analysis).
+
+**Five-way comparison complete (2026-05-13):**
+
+| Backend | Success | Wall | LLM calls | Run |
+|---|---|---|---|---|
+| Heuristic ε-greedy | 9/15 | 0.68s | 0 | [run 2](runs/2026-05-12-oci-run-2-mock.md) |
+| H + cornered escalation | 9/15 | 58.8s | 2 | [run 4](runs/2026-05-13-oci-run-4-heuristic-escalate.md) |
+| **H + smart escalation** | **11/15** | **10m16s** | **43** | [**run 5**](runs/2026-05-13-oci-run-5-smart-escalate.md) |
+| Qwen-everywhere via queen | 11/15 | 24m34s | ~140 | [run 1](runs/2026-05-12-oci-run-1.md) |
+| SmolLM2-local-on-ant | 3/15 | 28m49s | ~186 | [run 3](runs/2026-05-12-oci-run-3-smollm2.md) |
+
+**Architectural pivot:** the "1 queen + 4 ant-LLMs heterogeneous" plan in CLAUDE.md / SYNTHESIS.md is falsified on OCI free-tier hardware. Smart-trigger escalation (heuristic by default, queen-Qwen LLM call when cornered or wandering) gets 11/15 success at 2.4× speedup over Qwen-everywhere and beats heuristic-alone by +2/15. The LLM's primary role is **seeding the substrate** during cold-start, not deciding each ant step. See `feedback_octopus_brain_arm_falsified.md` in the auto-memory and run-5 Finding 3.
 
 Open follow-ups (in rough priority):
 
-- [x] ~~Swap Haiku for local Qwen2.5-7B (via ollama on the `nick-mel` queen)~~ — done 2026-05-12, see `runs/2026-05-12-oci-run-1.md`. Found ~10s per ant-step call (vs 1.09s smoke-test prediction); queen CPU is the bottleneck.
-- [x] ~~Visited-filter hardening for soft-instruction failures~~ — done 2026-05-12, see `runs/2026-05-12-oci-run-2-mock.md` for the mock-baseline comparison.
-- [ ] SmolLM2-360M on ants — in progress 2026-05-12. Cold-call timing on 1/8-OCPU x86 suggests ant-step prompt-eval at ~10 tps; full results pending in `runs/2026-05-12-oci-run-3-smollm2.md`.
+- [x] ~~Swap Haiku for local Qwen2.5-7B (via ollama on the `nick-mel` queen)~~ — done 2026-05-12 [run 1](runs/2026-05-12-oci-run-1.md).
+- [x] ~~Visited-filter hardening for soft-instruction failures~~ — done 2026-05-12 [run 2](runs/2026-05-12-oci-run-2-mock.md).
+- [x] ~~SmolLM2-360M on ants~~ — closed as no-go 2026-05-12 [run 3](runs/2026-05-12-oci-run-3-smollm2.md). Hardware-on-hardware verification: SmolLM2-on-E2.1.Micro-1/8-OCPU is dominated by heuristic.
+- [x] ~~Heuristic + queen-escalation prototype~~ — done 2026-05-13 ([run 4](runs/2026-05-13-oci-run-4-heuristic-escalate.md) + [run 5](runs/2026-05-13-oci-run-5-smart-escalate.md)). Validates the architectural pivot.
+- [ ] **Sub-plan escalation** — LLM returns 3-5 steps not 1 (TASKS.md #16; run 5 Finding 4)
+- [ ] **Escalation budget per ant** for bigger graphs (TASKS.md #17; run 5 Finding 5)
 - [ ] Implement MMAS-style bounded reinforcement + best-so-far update; re-run on same graph
 - [ ] Stress-test concurrency: 50+ ants writing simultaneously, look for corruption
 - [ ] Compare against an in-memory pheromone matrix on the same KG to answer the load-bearing Task #5 question quantitatively
-- [ ] Try a real KG (Hetionet subset, 1000+ nodes) once Task #3 (Hetionet verification) lands
+- [ ] Try a real KG (Hetionet subset, 1000+ nodes) once Hetionet verification lands
 
 ## File structure
 
